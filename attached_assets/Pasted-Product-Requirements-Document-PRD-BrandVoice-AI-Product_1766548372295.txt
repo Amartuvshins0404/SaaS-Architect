@@ -1,0 +1,77 @@
+Product Requirements Document (PRD): BrandVoice AI
+Product Name: BrandVoice AI
+Type: Micro-SaaS
+Tech Stack: Next.js (App Router), Google Gemini API, Supabase (Auth, Database, Storage, Edge Functions)
+1. Overview
+Web app that rewrites AI-generated copy to match a user's specific brand voice. Users upload raw AI text + brand guidelines → get persuasive, emotional, authentic output.
+Target: Marketers, content creators, solopreneurs frustrated with generic AI output.
+2. Core Features (MVP)
+
+User authentication (Supabase Auth: email/password + Google OAuth)
+Brand Voice management:
+Create multiple brand voices
+Fields: Name, Guidelines (textarea), Tone tags (e.g., witty, professional)
+
+Rewrite tool:
+Input: Raw AI text (textarea)
+Select brand voice (dropdown)
+Generate rewritten text via Gemini API
+Display side-by-side (original vs rewritten)
+Copy to clipboard + edit/save
+
+History: List of past rewrites (stored per user)
+Usage tracking (for billing limits)
+
+3. Subscription Tiers
+
+Free: 20 rewrites/month
+Pro: $15/mo → unlimited rewrites, unlimited brand voices, priority processing
+
+Handled via Supabase + Stripe integration (webhooks in Edge Functions)
+4. Data Model (Supabase Postgres)
+
+users (from Supabase Auth)
+brand_voices
+id (uuid PK)
+user_id (fk)
+name (text)
+guidelines (text)
+created_at
+
+rewrites
+id (uuid PK)
+user_id (fk)
+brand_voice_id (fk, nullable)
+original_text (text)
+rewritten_text (text)
+created_at
+
+subscriptions (via Stripe customer_id + status)
+
+5. Key Pages/Routes (Next.js App Router)
+
+/ (marketing landing page)
+/app/dashboard (main rewrite interface)
+/app/voices (list/create/edit brand voices)
+/app/history
+/app/settings (billing, profile)
+
+6. Gemini Integration
+Server-side only (API route or Supabase Edge Function):
+
+Prompt template:
+"Rewrite the following text to exactly match this brand voice. Guidelines: {guidelines}. Make it persuasive, emotional, and authentic. Output ONLY the rewritten text:\n\n{original_text}"
+Model: gemini-1.5-flash (cost-effective)
+
+7. Supabase Usage
+
+Auth: Full user management
+Database: All tables above
+Storage: None needed for MVP
+Edge Functions: Stripe webhooks, usage counting, Gemini calls (to hide API key)
+
+8. Non-functional
+
+Rate limiting per user (RLS + daily counters)
+Responsive design (Tailwind)
+Fast loading (SSR where possible)
