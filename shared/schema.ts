@@ -7,6 +7,8 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   subscriptionTier: text("subscription_tier").default("free"),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -53,6 +55,14 @@ export const refinedFeedback = pgTable("refined_feedback", {
   status: text("status").default("pending"), // 'pending', 'rejected', 'implemented'
   rejectionReason: text("rejection_reason"),
   isIncorporated: boolean("is_incorporated").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const userFeedback = pgTable("user_feedback", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  message: text("message").notNull(),
+  category: text("category").default("general").notNull(), // 'bug', 'feature', 'general'
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -107,6 +117,14 @@ export type InsertPromptFeedback = z.infer<typeof insertPromptFeedbackSchema>;
 
 export type RefinedFeedback = typeof refinedFeedback.$inferSelect;
 export type InsertRefinedFeedback = z.infer<typeof insertRefinedFeedbackSchema>;
+
+export const insertUserFeedbackSchema = createInsertSchema(userFeedback).omit({
+  id: true,
+  createdAt: true
+});
+
+export type UserFeedback = typeof userFeedback.$inferSelect;
+export type InsertUserFeedback = z.infer<typeof insertUserFeedbackSchema>;
 
 // API Request Types
 export type CreateBrandVoiceRequest = InsertBrandVoice;

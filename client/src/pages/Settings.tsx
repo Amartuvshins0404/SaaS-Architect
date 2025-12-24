@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { User, CreditCard, Shield, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export default function Settings() {
   const { user } = useAuth();
@@ -16,51 +28,120 @@ export default function Settings() {
   const [newPassword, setNewPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const [upgrading, setUpgrading] = useState(false);
+
+  // Check for success/canceled params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("success") === "true" && params.get("session_id")) {
+      const verifyPayment = async () => {
+        try {
+          const res = await apiRequest("POST", "/api/verify-checkout", {
+            session_id: params.get("session_id")
+          });
+          const data = await res.json();
+
+          if (data.success) {
+            toast({ title: "Success", description: "Your Pro plan is active!" });
+            // Clean URL
+            window.history.replaceState(null, "", window.location.pathname);
+            // Reload to update UI state
+            setTimeout(() => window.location.reload(), 1000);
+          } else {
+            toast({
+              variant: "destructive",
+              title: "Verification Incomplete",
+              description: `Status: ${data.status}. Please try again later or contact support.`
+            });
+          }
+        } catch (e) {
+          console.error(e);
+          toast({ variant: "destructive", title: "Verification Failed", description: "Could not verify payment." });
+        }
+      };
+      verifyPayment();
+    }
+  }, []);
+
   const handleUpgradePlan = async () => {
-    toast({ 
-      title: "Coming Soon", 
-      description: "Stripe integration for Pro plan upgrades is coming soon!" 
-    });
+    setUpgrading(true);
+    try {
+      const res = await apiRequest("POST", "/api/create-checkout-session");
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to start checkout"
+      });
+      setUpgrading(false);
+    }
+  };
+
+  const handleCancelPlan = async () => {
+    setUpgrading(true);
+    try {
+      await apiRequest("POST", "/api/cancel-subscription");
+      toast({ title: "Success", description: "Subscription canceled. You formely downgraded to the Free plan." });
+      setTimeout(() => window.location.reload(), 1000);
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to cancel subscription"
+      });
+      setUpgrading(false);
+    }
   };
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentPassword || !newPassword) {
-      toast({ 
-        variant: "destructive",
-        title: "Validation Error", 
-        description: "Please fill in all fields." 
-      });
+      toast({ variant: "destructive", title: "Error", description: "All fields are required" });
       return;
     }
+
     setLoading(true);
     try {
-      // Placeholder for password change - would need backend implementation
-      toast({ 
-        title: "Password Change", 
-        description: "Password change feature coming soon!" 
+      await apiRequest("POST", "/api/user/password", {
+        currentPassword,
+        newPassword
+      });
+
+      toast({
+        title: "Success",
+        description: "Your password has been updated securely."
       });
       setShowPasswordForm(false);
       setCurrentPassword("");
       setNewPassword("");
     } catch (error: any) {
-      toast({ 
+      toast({
         variant: "destructive",
-        title: "Error", 
-        description: error.message 
+        title: "Error",
+        description: error.message
       });
     } finally {
       setLoading(false);
     }
   };
 
+  const isPro = user?.subscriptionTier === "pro";
+
   return (
     <AppLayout>
-      <div className="space-y-8 max-w-4xl">
-        <header>
-          <h1 className="text-3xl font-display font-bold text-foreground">Settings</h1>
-          <p className="text-muted-foreground">Manage your account preferences and subscription.</p>
-        </header>
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+            Settings
+          </h2>
+          <p className="text-muted-foreground">
+            Manage your account preferences and subscription.
+          </p>
+        </div>
 
         <div className="grid gap-6">
           {/* Profile Section */}
@@ -74,11 +155,11 @@ export default function Settings() {
             <CardContent className="space-y-4">
               <div className="grid gap-2">
                 <Label>Username</Label>
-                <Input value={user?.username} disabled className="bg-muted/50" />
+                <Input value={user?.username} disabled className="bg-muted" />
               </div>
               <div className="grid gap-2">
                 <Label>Account ID</Label>
-                <Input value={user?.id} disabled className="bg-muted/50 font-mono text-sm" />
+                <Input value={user?.id} disabled className="bg-muted" />
               </div>
             </CardContent>
           </Card>
@@ -95,74 +176,104 @@ export default function Settings() {
               <div className="flex items-center justify-between p-4 bg-primary/5 rounded-lg border border-primary/10">
                 <div>
                   <p className="font-medium text-lg">Current Plan: {user?.subscriptionTier || "Free"}</p>
-                  <p className="text-sm text-muted-foreground">You are on the basic tier.</p>
+                  <p className="text-sm text-muted-foreground">
+                    {isPro ? "You have access to all premium features." : "You are on the basic tier."}
+                  </p>
                 </div>
-                <Button onClick={handleUpgradePlan} data-testid="button-upgrade-pro">Upgrade to Pro</Button>
+                {isPro ? (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button disabled={upgrading} variant="destructive" data-testid="button-cancel-plan">
+                        {upgrading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Cancel Plan
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Cancel Subscription?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Are you sure you want to cancel your Pro subscription? You will lose access to premium features immediately.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Keep Subscription</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleCancelPlan} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                          Yes, Cancel
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                ) : (
+                  <Button onClick={handleUpgradePlan} disabled={upgrading} data-testid="button-upgrade-pro">
+                    {upgrading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Upgrade to Pro
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
 
           {/* Security Section */}
           <Card>
-             <CardHeader>
-               <CardTitle className="flex items-center gap-2">
-                 <Shield className="h-5 w-5 text-primary" /> Security
-               </CardTitle>
-               <CardDescription>Password and authentication settings.</CardDescription>
-             </CardHeader>
-             <CardContent className="space-y-4">
-               {!showPasswordForm ? (
-                 <Button 
-                   variant="outline" 
-                   onClick={() => setShowPasswordForm(true)}
-                   data-testid="button-change-password"
-                 >
-                   Change Password
-                 </Button>
-               ) : (
-                 <form onSubmit={handleChangePassword} className="space-y-4 p-4 bg-muted/30 rounded-lg">
-                   <div className="space-y-2">
-                     <Label htmlFor="current-pwd">Current Password</Label>
-                     <Input 
-                       id="current-pwd"
-                       type="password" 
-                       placeholder="Enter current password"
-                       value={currentPassword}
-                       onChange={(e) => setCurrentPassword(e.target.value)}
-                       required
-                     />
-                   </div>
-                   <div className="space-y-2">
-                     <Label htmlFor="new-pwd">New Password</Label>
-                     <Input 
-                       id="new-pwd"
-                       type="password" 
-                       placeholder="Enter new password"
-                       value={newPassword}
-                       onChange={(e) => setNewPassword(e.target.value)}
-                       required
-                     />
-                   </div>
-                   <div className="flex gap-2">
-                     <Button 
-                       type="submit" 
-                       disabled={loading}
-                       data-testid="button-save-password"
-                     >
-                       {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                       Save Password
-                     </Button>
-                     <Button 
-                       type="button" 
-                       variant="outline"
-                       onClick={() => setShowPasswordForm(false)}
-                     >
-                       Cancel
-                     </Button>
-                   </div>
-                 </form>
-               )}
-             </CardContent>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-primary" /> Security
+              </CardTitle>
+              <CardDescription>Password and authentication settings.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {!showPasswordForm ? (
+                <Button
+                  variant="outline"
+                  onClick={() => setShowPasswordForm(true)}
+                  data-testid="button-change-password"
+                >
+                  Change Password
+                </Button>
+              ) : (
+                <form onSubmit={handleChangePassword} className="space-y-4 p-4 bg-muted/30 rounded-lg">
+                  <div className="space-y-2">
+                    <Label htmlFor="current-pwd">Current Password</Label>
+                    <Input
+                      id="current-pwd"
+                      type="password"
+                      placeholder="Enter current password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="new-pwd">New Password</Label>
+                    <Input
+                      id="new-pwd"
+                      type="password"
+                      placeholder="Enter new password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      type="submit"
+                      disabled={loading}
+                      data-testid="button-save-password"
+                    >
+                      {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Save Password
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowPasswordForm(false)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              )}
+            </CardContent>
           </Card>
         </div>
       </div>

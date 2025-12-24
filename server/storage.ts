@@ -5,7 +5,8 @@ import {
   type BrandVoice, type InsertBrandVoice,
   type Rewrite, type InsertRewrite,
   type SystemPrompt, type InsertPromptFeedback, type InsertRefinedFeedback,
-  type PromptFeedback, type RefinedFeedback
+  type PromptFeedback, type RefinedFeedback, type UserFeedback, type InsertUserFeedback,
+  userFeedback
 } from "@shared/schema";
 import { eq, desc, inArray } from "drizzle-orm";
 import session from "express-session";
@@ -20,8 +21,11 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUserPassword(id: number, password: string): Promise<void>;
+  updateUserSubscription(id: number, tier: string, stripeSubscriptionId?: string, stripeCustomerId?: string): Promise<void>;
 
   // Brand Voices
+  getBrandVoices(userId: number): Promise<BrandVoice[]>;
   getBrandVoices(userId: number): Promise<BrandVoice[]>;
   getBrandVoice(id: number): Promise<BrandVoice | undefined>;
   createBrandVoice(userId: number, voice: InsertBrandVoice): Promise<BrandVoice>;
@@ -37,8 +41,12 @@ export interface IStorage {
   createSystemPrompt(content: string, instructionsList?: string[]): Promise<SystemPrompt>;
   createPromptFeedback(feedback: InsertPromptFeedback): Promise<PromptFeedback>;
   createRefinedFeedback(feedback: InsertRefinedFeedback): Promise<RefinedFeedback>;
+  createRefinedFeedback(feedback: InsertRefinedFeedback): Promise<RefinedFeedback>;
   getPendingRefinedFeedback(): Promise<RefinedFeedback[]>;
   markRefinedFeedbackAsImplemented(ids: number[]): Promise<void>;
+
+  // User Feedback
+  createUserFeedback(feedback: InsertUserFeedback): Promise<UserFeedback>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -65,6 +73,18 @@ export class DatabaseStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     const [user] = await db.insert(users).values(insertUser).returning();
     return user;
+  }
+
+  async updateUserPassword(id: number, password: string): Promise<void> {
+    await db.update(users).set({ password }).where(eq(users.id, id));
+  }
+
+  async updateUserSubscription(id: number, tier: string, stripeSubscriptionId?: string, stripeCustomerId?: string): Promise<void> {
+    const updateData: any = { subscriptionTier: tier };
+    if (stripeSubscriptionId) updateData.stripeSubscriptionId = stripeSubscriptionId;
+    if (stripeCustomerId) updateData.stripeCustomerId = stripeCustomerId;
+
+    await db.update(users).set(updateData).where(eq(users.id, id));
   }
 
   // Brand Voices
@@ -150,6 +170,11 @@ export class DatabaseStorage implements IStorage {
       .update(refinedFeedback)
       .set({ status: "implemented", isIncorporated: true })
       .where(inArray(refinedFeedback.id, ids));
+  }
+
+  async createUserFeedback(feedback: InsertUserFeedback): Promise<UserFeedback> {
+    const [entry] = await db.insert(userFeedback).values(feedback).returning();
+    return entry;
   }
 }
 

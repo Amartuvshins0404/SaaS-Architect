@@ -5,13 +5,14 @@ import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
+import { stripe } from "./stripe";
 import { brandVoices } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth } from "./auth";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { insertPromptFeedbackSchema } from "@shared/schema";
+import { insertPromptFeedbackSchema, insertUserFeedbackSchema } from "@shared/schema";
 
 // Routes registration
 export async function registerRoutes(
@@ -294,6 +295,121 @@ Output ONLY the generated post content.`;
     } catch (err) {
       console.error("Feedback governance error:", err);
       res.status(500).json({ message: "Failed to process feedback" });
+    }
+  });
+
+  // --- General User Feedback (Non-AI) ---
+  app.post("/api/user-feedback", requireAuth, async (req, res) => {
+    try {
+      const input = insertUserFeedbackSchema.parse({
+        ...req.body,
+        userId: req.user!.id
+      });
+      await storage.createUserFeedback(input);
+      res.status(201).json({ message: "Feedback received" });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      console.error("User feedback error:", err);
+      res.status(500).json({ message: "Failed to save feedback" });
+    }
+  });
+
+  app.post("/api/create-checkout-session", requireAuth, async (req, res) => {
+    try {
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ["card"],
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              product_data: {
+                name: "Pro Subscription",
+                description: "Unlock all premium features",
+              },
+              unit_amount: 2900, // $29.00
+              recurring: {
+                interval: "month",
+              },
+            },
+            quantity: 1,
+          },
+        ],
+        mode: "subscription",
+        success_url: `${req.headers.origin}/app/settings?success=true&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${req.headers.origin}/app/settings?canceled=true`,
+        client_reference_id: req.user!.id.toString(),
+        metadata: {
+          userId: req.user!.id.toString()
+        }
+      });
+
+      res.json({ url: session.url });
+    } catch (err: any) {
+      console.error("Stripe error:", err);
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/verify-checkout", requireAuth, async (req, res) => {
+    const { session_id } = req.body;
+    console.log("Verify checkout request:", { session_id, userId: req.user?.id });
+
+    if (!session_id || typeof session_id !== 'string') {
+      return res.status(400).json({ message: "Missing session_id" });
+    }
+
+    try {
+      const session = await stripe.checkout.sessions.retrieve(session_id);
+      console.log("Stripe session retrieved:", { id: session.id, status: session.payment_status });
+
+      if (session.payment_status === 'paid') {
+        const subscriptionId = session.subscription as string;
+        const customerId = session.customer as string;
+
+        await storage.updateUserSubscription(
+          req.user!.id,
+          "pro",
+          subscriptionId,
+          customerId
+        );
+        console.log("User updated to pro:", req.user!.id);
+        return res.json({ success: true, tier: "pro" });
+      }
+      res.json({ success: false, status: session.payment_status });
+    } catch (err: any) {
+      console.error("Verify checkout error:", err);
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/cancel-subscription", requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.user!.id);
+      if (!user) return res.sendStatus(404);
+
+      if (user.subscriptionTier !== "pro") {
+        return res.status(400).json({ message: "Not subscribed to Pro plan" });
+      }
+
+      // Try to cancel in Stripe if ID exists
+      if (user.stripeSubscriptionId) {
+        try {
+          await stripe.subscriptions.cancel(user.stripeSubscriptionId);
+          console.log("Stripe subscription canceled:", user.stripeSubscriptionId);
+        } catch (stripeErr: any) {
+          console.error("Stripe cancel error (ignoring to force downgrade):", stripeErr);
+          // We continue to downgrade locally even if Stripe fails (e.g. already canceled)
+        }
+      }
+
+      // Downgrade locally
+      await storage.updateUserSubscription(req.user!.id, "free", undefined, undefined); // undefined explicitly
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error("Cancel subscription error:", err);
+      res.status(500).json({ message: err.message });
     }
   });
 
