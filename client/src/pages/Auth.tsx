@@ -33,10 +33,10 @@ export default function Auth() {
       await login.mutateAsync({ username, password });
       toast({ title: "Welcome back!", description: "You have successfully logged in." });
     } catch (error: any) {
-      toast({ 
+      toast({
         variant: "destructive",
-        title: "Login failed", 
-        description: error.message 
+        title: "Login failed",
+        description: error.message
       });
     }
   };
@@ -47,126 +47,139 @@ export default function Auth() {
       await register.mutateAsync({ username, password });
       toast({ title: "Account created!", description: "Welcome to BrandVoice AI." });
     } catch (error: any) {
-      toast({ 
+      toast({
         variant: "destructive",
-        title: "Registration failed", 
-        description: error.message 
+        title: "Registration failed",
+        description: error.message
       });
     }
   };
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-2 bg-background">
-      {/* Left Panel - Form */}
-      <div className="flex items-center justify-center p-8">
-        <div className="w-full max-w-md space-y-8">
-          <div className="text-center lg:text-left">
-            <div className="inline-flex items-center gap-2 mb-4">
-              <Sparkles className="h-6 w-6 text-primary" />
-              <span className="font-display text-xl font-bold">BrandVoice AI</span>
-            </div>
-            <h1 className="text-3xl font-display font-bold tracking-tight">Welcome Back</h1>
-            <p className="mt-2 text-muted-foreground">Sign in to your account to continue</p>
-          </div>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 relative overflow-hidden selection:bg-primary/30">
 
+      {/* Ambient Background Effects */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-0 left-1/4 w-[1000px] h-[600px] bg-primary/5 rounded-full blur-[128px] -translate-y-1/2 opacity-50" />
+        <div className="absolute bottom-0 right-1/4 w-[800px] h-[600px] bg-blue-600/5 rounded-full blur-[128px] translate-y-1/2 opacity-50" />
+        {/* Grid Pattern */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]" />
+      </div>
+
+      <div className="w-full max-w-sm relative z-10 mb-8 flex items-center gap-3 px-2">
+        <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center shadow-lg shadow-primary/25">
+          <Sparkles className="h-5 w-5 text-primary-foreground fill-current" />
+        </div>
+        <span className="font-display text-xl font-bold tracking-tight text-foreground">BrandVoice AI</span>
+      </div>
+
+      <Card className="w-full max-w-md border-border/40 bg-card/60 backdrop-blur-xl shadow-2xl relative z-10">
+        <CardHeader className="space-y-1 text-center pb-6 pt-8">
+          <CardTitle className="text-2xl font-bold tracking-tight">Welcome Back</CardTitle>
+          <CardDescription className="text-muted-foreground">
+            Enter your credentials to access your workspace
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
           <Tabs defaultValue="login" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-8">
-              <TabsTrigger value="login">Login</TabsTrigger>
-              <TabsTrigger value="register">Register</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-2 mb-6 bg-secondary/50">
+              <TabsTrigger value="login" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg">Login</TabsTrigger>
+              <TabsTrigger value="register" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg">Register</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="login">
+            <TabsContent value="login" className="space-y-4">
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="username">Username</Label>
-                  <Input 
-                    id="username" 
+                  <Label htmlFor="username" className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Username</Label>
+                  <Input
+                    id="username"
                     placeholder="Enter your username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     required
+                    className="bg-secondary/30 border-input/50 focus-visible:ring-primary/30 h-10"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <Input 
-                    id="password" 
-                    type="password" 
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="password" className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Password</Label>
+                    <span className="text-xs text-primary cursor-pointer hover:underline">Forgot password?</span>
+                  </div>
+                  <Input
+                    id="password"
+                    type="password"
                     placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
+                    className="bg-secondary/30 border-input/50 focus-visible:ring-primary/30 h-10"
                   />
                 </div>
-                <Button 
-                  type="submit" 
-                  className="w-full bg-primary hover:bg-primary/90" 
+                <Button
+                  type="submit"
+                  className="w-full bg-primary hover:bg-primary/90 h-10 font-semibold shadow-lg shadow-primary/20 transition-transform active:scale-[0.98]"
                   disabled={login.isPending}
                 >
-                  {login.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Sign In
+                  {login.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Sign In"}
+                </Button>
+
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t border-border/50" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background/0 px-2 text-muted-foreground backdrop-blur-sm">Or continue with</span>
+                  </div>
+                </div>
+
+                <Button variant="outline" type="button" className="w-full border-input/50 bg-secondary/30 hover:bg-secondary/50 h-10" disabled>
+                  Google (Coming Soon)
                 </Button>
               </form>
             </TabsContent>
 
-            <TabsContent value="register">
+            <TabsContent value="register" className="space-y-4">
               <form onSubmit={handleRegister} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="reg-username">Username</Label>
-                  <Input 
-                    id="reg-username" 
+                  <Label htmlFor="reg-username" className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Username</Label>
+                  <Input
+                    id="reg-username"
                     placeholder="Choose a username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     required
+                    className="bg-secondary/30 border-input/50 focus-visible:ring-primary/30 h-10"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="reg-password">Password</Label>
-                  <Input 
-                    id="reg-password" 
-                    type="password" 
+                  <Label htmlFor="reg-password" className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Password</Label>
+                  <Input
+                    id="reg-password"
+                    type="password"
                     placeholder="Create a password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
+                    className="bg-secondary/30 border-input/50 focus-visible:ring-primary/30 h-10"
                   />
                 </div>
-                <Button 
-                  type="submit" 
-                  className="w-full bg-primary hover:bg-primary/90"
+                <Button
+                  type="submit"
+                  className="w-full bg-primary hover:bg-primary/90 h-10 font-semibold shadow-lg shadow-primary/20 transition-transform active:scale-[0.98]"
                   disabled={register.isPending}
                 >
-                  {register.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Create Account
+                  {register.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Create Account"}
                 </Button>
               </form>
             </TabsContent>
           </Tabs>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
-      {/* Right Panel - Visual */}
-      <div className="hidden lg:flex flex-col justify-center p-12 bg-muted/20 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-primary/5 to-background" />
-        <div className="relative z-10 max-w-lg mx-auto text-center space-y-6">
-          <div className="bg-white/50 backdrop-blur-xl rounded-2xl p-8 shadow-2xl border border-white/20">
-            <div className="space-y-4">
-              <div className="h-2 w-20 bg-primary/20 rounded-full" />
-              <div className="space-y-2">
-                <div className="h-4 w-full bg-muted-foreground/10 rounded-full" />
-                <div className="h-4 w-3/4 bg-muted-foreground/10 rounded-full" />
-              </div>
-              <div className="pt-4 border-t border-primary/10">
-                 <p className="text-primary font-medium italic">"Transformed into perfect brand voice..."</p>
-              </div>
-            </div>
-          </div>
-          <div>
-            <h2 className="text-2xl font-display font-bold">Consistent Brand Voice</h2>
-            <p className="text-muted-foreground mt-2">Maintain your unique identity across all communication channels with AI-powered rewriting.</p>
-          </div>
-        </div>
+      <div className="mt-8 flex gap-6 text-sm text-muted-foreground/60">
+        <span className="hover:text-muted-foreground cursor-pointer transition-colors">Privacy Policy</span>
+        <span className="hover:text-muted-foreground cursor-pointer transition-colors">Terms of Service</span>
+        <span className="hover:text-muted-foreground cursor-pointer transition-colors">Contact</span>
       </div>
     </div>
   );

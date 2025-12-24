@@ -105,58 +105,66 @@ export default function Voices() {
 
           <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20">
+              <Button className="bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95">
                 <Plus className="mr-2 h-4 w-4" /> Create New Voice
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-lg">
+            <DialogContent className="sm:max-w-lg bg-[#0B0E14] border border-primary/20 shadow-2xl shadow-black/50 overflow-hidden">
+              <div className="absolute top-0 w-full h-1 bg-gradient-to-r from-transparent via-primary to-transparent opacity-50" />
               <DialogHeader>
-                <DialogTitle>Create Brand Voice</DialogTitle>
-                <DialogDescription>Define how your brand should sound. The AI will follow these guidelines.</DialogDescription>
+                <DialogTitle className="text-xl font-bold tracking-tight text-foreground">Create Brand Voice</DialogTitle>
+                <DialogDescription className="text-muted-foreground/80">
+                  Define how your brand should sound. The AI will follow these guidelines.
+                </DialogDescription>
               </DialogHeader>
-              <form onSubmit={handleCreate} className="space-y-4 mt-4">
+              <form onSubmit={handleCreate} className="space-y-6 mt-2">
                 <div className="space-y-2">
-                  <Label>Voice Name</Label>
+                  <Label className="text-sm font-semibold text-foreground/90">Voice Name</Label>
                   <Input
                     placeholder="e.g. Professional LinkedIn, Casual Twitter"
                     value={name}
                     onChange={e => setName(e.target.value)}
                     required
+                    className="bg-secondary/20 border-primary/20 focus-visible:ring-primary focus-visible:border-primary placeholder:text-muted-foreground/40 h-11 transition-all"
                   />
                 </div>
+
                 <div className="space-y-2">
-                  <Label>Tone Keywords (comma separated)</Label>
+                  <Label className="text-sm font-semibold text-foreground/90">Tone Keywords (comma separated)</Label>
                   <Input
                     placeholder="e.g. witty, professional, concise, empathetic"
                     value={toneTags}
                     onChange={e => setToneTags(e.target.value)}
+                    className="bg-secondary/20 border-primary/20 focus-visible:ring-primary focus-visible:border-primary placeholder:text-muted-foreground/40 h-11 transition-all"
                   />
                 </div>
-                <div className="space-y-2">
+
+                <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <Label>Style Guidelines</Label>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleAiEnhance}
-                      disabled={isGenerating}
-                      className="h-6 text-xs text-primary hover:text-primary hover:bg-primary/10"
+                    <Label className="text-sm font-semibold text-foreground/90">Style Guidelines</Label>
+                    <div
+                      onClick={isGenerating ? undefined : handleAiEnhance}
+                      className={`flex items-center gap-1.5 text-xs font-medium cursor-pointer transition-colors ${isGenerating ? 'text-muted-foreground cursor-wait' : 'text-primary hover:text-primary/80'}`}
                     >
-                      {isGenerating ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Sparkles className="mr-1 h-3 w-3" />}
-                      Enhance with AI
-                    </Button>
+                      {isGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                      {isGenerating ? "Enhancing..." : "Enhance with AI"}
+                    </div>
                   </div>
                   <Textarea
                     placeholder="Describe specific rules: 'Never use passive voice', 'Always start with a greeting', etc."
-                    className="h-32"
+                    className="min-h-[140px] bg-secondary/20 border-primary/20 focus-visible:ring-primary focus-visible:border-primary placeholder:text-muted-foreground/40 resize-none leading-relaxed transition-all"
                     value={guidelines}
                     onChange={e => setGuidelines(e.target.value)}
                     required
                   />
                 </div>
-                <div className="flex justify-end pt-4">
-                  <Button type="submit" disabled={creating}>
+
+                <div className="flex justify-end pt-2">
+                  <Button
+                    type="submit"
+                    disabled={creating}
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-lg shadow-primary/20 w-fit px-8"
+                  >
                     {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     Create Voice
                   </Button>
@@ -171,16 +179,16 @@ export default function Voices() {
             <Loader2 className="h-8 w-8 animate-spin text-primary/30" />
           </div>
         ) : voices?.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 rounded-2xl border border-dashed border-border bg-card/50">
-            <Mic2 className="h-10 w-10 text-muted-foreground mb-4" />
-            <h3 className="font-semibold text-lg">No voices yet</h3>
+          <div className="flex flex-col items-center justify-center h-64 rounded-2xl border border-dashed border-primary/20 bg-card/50">
+            <Mic2 className="h-10 w-10 text-muted-foreground mb-4 opacity-50" />
+            <h3 className="font-semibold text-lg text-foreground">No voices yet</h3>
             <p className="text-muted-foreground mb-4">Create your first brand voice to get started.</p>
-            <Button variant="outline" onClick={() => setIsOpen(true)}>Create Voice</Button>
+            <Button variant="outline" onClick={() => setIsOpen(true)} className="border-primary/20 hover:bg-primary/10 hover:text-primary">Create Voice</Button>
           </div>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {voices?.map((voice) => (
-              <Card key={voice.id} className="group relative overflow-hidden transition-all hover:shadow-lg hover:border-primary/30">
+              <Card key={voice.id} className="group relative overflow-hidden transition-all hover:shadow-lg hover:border-primary/50 border-primary/20 bg-card/50">
                 <div className="p-6 space-y-4">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
@@ -188,14 +196,14 @@ export default function Voices() {
                         <Mic2 className="h-5 w-5" />
                       </div>
                       <div>
-                        <h3 className="font-bold text-lg leading-tight">{voice.name}</h3>
+                        <h3 className="font-bold text-lg leading-tight text-foreground">{voice.name}</h3>
                         <p className="text-xs text-muted-foreground mt-0.5">Created recently</p>
                       </div>
                     </div>
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                       onClick={() => handleDelete(voice.id)}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -205,13 +213,13 @@ export default function Voices() {
                   <div className="space-y-3">
                     <div className="flex flex-wrap gap-2">
                       {voice.toneTags?.map((tag, i) => (
-                        <span key={i} className="inline-flex items-center rounded-md bg-secondary px-2 py-1 text-xs font-medium text-secondary-foreground ring-1 ring-inset ring-gray-500/10">
+                        <span key={i} className="inline-flex items-center rounded-md bg-secondary/50 px-2 py-1 text-xs font-medium text-secondary-foreground border border-white/5">
                           {tag}
                         </span>
                       ))}
                     </div>
 
-                    <div className="rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground line-clamp-3">
+                    <div className="rounded-lg bg-secondary/30 p-3 text-sm text-muted-foreground line-clamp-3 border border-transparent">
                       <FileText className="inline-block w-3 h-3 mr-1 mb-0.5 opacity-50" />
                       {voice.guidelines}
                     </div>

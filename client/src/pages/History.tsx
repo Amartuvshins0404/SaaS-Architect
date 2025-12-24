@@ -33,7 +33,7 @@ export default function History() {
         ) : (
           <div className="space-y-4">
             {rewrites?.map((item) => (
-              <Card key={item.id} className="overflow-hidden hover:shadow-md transition-shadow">
+              <Card key={item.id} className="overflow-hidden hover:shadow-md transition-shadow border-primary/20 bg-card/50">
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
@@ -48,12 +48,12 @@ export default function History() {
                   </div>
 
                   <div className="grid md:grid-cols-[1fr,auto,1fr] gap-4 items-start">
-                    <div className="bg-muted/30 p-4 rounded-lg text-sm text-muted-foreground">
+                    <div className="bg-secondary/30 p-4 rounded-lg text-sm text-muted-foreground border border-transparent">
                       {item.originalText}
                     </div>
-                    
+
                     <div className="hidden md:flex items-center justify-center h-full">
-                       <ArrowRight className="text-muted-foreground/30" />
+                      <ArrowRight className="text-muted-foreground/30" />
                     </div>
 
                     <div className="bg-primary/5 p-4 rounded-lg text-sm text-foreground font-medium border border-primary/10">
