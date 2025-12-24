@@ -31,27 +31,45 @@ sudo npm install -g pm2
 sudo apt install -y git
 ```
 
-## 2. Clone Repository
+## 2. Dedicated Web User (Security Recommended)
 
-Using a deploy key or HTTPS token is recommended.
+Create a system user `webuser` with limited privileges (no login shell) to run the application.
+
+```bash
+# Create user 'webuser' (system user, no login)
+sudo useradd -r -s /usr/sbin/nologin -d /var/www webuser
+
+# Create access to the app folder
+sudo usermod -aG webuser $USER
+```
+
+## 3. Clone / Setup Repository
+
+Since you are deploying directly to `/var/www`:
 
 ```bash
 cd /var/www
-# Option 1: HTTPS
-sudo git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git saas-architect
 
-# Give ownership to your user (replace 'ubuntu' with your username)
-sudo chown -R ubuntu:ubuntu saas-architect
-cd saas-architect
+# Ensure directory is owned by current user (for cloning/copying)
+sudo chown $USER:$USER /var/www
+
+# Clone the repo (replace with your repo URL)
+git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git .
+# OR if files are already there, just ensure they are in /var/www
+
+# Set ownership to webuser:webuser for security
+sudo chown -R webuser:webuser /var/www
+sudo chmod -R 775 /var/www
 ```
 
-## 3. Environment Configuration
+## 4. Environment Configuration
 
 Create the `.env` file with your production secrets.
 
 ```bash
 cp .env.example .env
-nano .env
+# Edit the file (you might need sudo if owned by webuser)
+sudo -u webuser nano .env
 ```
 
 Ensure you set:
@@ -60,36 +78,41 @@ Ensure you set:
 - `GOOGLE_API_KEY=your_gemini_key`
 - `PORT=5000`
 
-## 4. Install & Build
+## 5. Install & Build
 
 Install dependencies and build the application.
 
 ```bash
-npm install
-npm run build
+# Run as webuser to maintain permission consistency
+sudo -u webuser npm install
+sudo -u webuser npm run build
 ```
 
 The build script will generate a `dist` folder containing `index.cjs` (Server) and `public` (Client assets).
 
-## 5. Start with PM2
+## 6. Start with PM2 (as webuser)
 
-Start the application in cluster mode for reliability.
+Start the application *as the webuser* to restrict its access.
 
 ```bash
-pm2 start dist/index.cjs --name "saas-app" --node-args="--env-file=.env"
-pm2 save
-pm2 startup
+# Start the app using the ecosystem file
+sudo -u webuser npx pm2 start ecosystem.config.cjs
+
+# Save the process list (for webuser)
+sudo -u webuser npx pm2 save
+
+# Generate startup script dynamically
+# 1. Run this command to generate the script:
+sudo pm2 startup systemd -u webuser --hp /var/www
+
+# 2. COPY AND PASTE the output command that starts with "sudo env PATH=..."
+# Run that pasted command to enable startup.
 ```
 
-*(Note: The `npm start` script uses `node dist/index.cjs`, which assumes `NODE_ENV=production` is set in your environment or .env file)*
+*(To check status later: `sudo -u webuser pm2 status`)*
+*(To check logs if 'errored': `sudo -u webuser pm2 logs`)*
 
-Verify it's running:
-```bash
-pm2 status
-curl http://localhost:5000/api/health # or just curl http://localhost:5000
-```
-
-## 6. Setup Nginx Reverse Proxy
+## 7. Setup Nginx Reverse Proxy
 
 Install Nginx:
 
@@ -125,11 +148,12 @@ Enable the site:
 
 ```bash
 sudo ln -s /etc/nginx/sites-available/saas-app /etc/nginx/sites-enabled/
+sudo rm /etc/nginx/sites-enabled/default
 sudo nginx -t
 sudo systemctl restart nginx
 ```
 
-## 7. SSL Certificate (HTTPS)
+## 8. SSL Certificate (HTTPS)
 
 Secure your site with strict HTTPS using Certbot.
 
@@ -140,14 +164,14 @@ sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
 
 Select option **2** to Redirect HTTP to HTTPS.
 
-## 8. Updates
+## 9. Updates
 
 To deploy new changes:
 
 ```bash
-cd /var/www/saas-architect
+cd /var/www
 git pull
-npm install
-npm run build
-pm2 restart saas-app
+sudo -u webuser npm install
+sudo -u webuser npm run build
+sudo -u webuser pm2 restart saas-app
 ```
