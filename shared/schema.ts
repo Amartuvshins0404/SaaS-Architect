@@ -49,6 +49,9 @@ export const refinedFeedback = pgTable("refined_feedback", {
   id: serial("id").primaryKey(),
   originalFeedbackId: integer("original_feedback_id").notNull(), // Link to raw feedback
   refinedContent: text("refined_content").notNull(),
+  score: integer("score").default(0), // 0-100 Quality Score
+  status: text("status").default("pending"), // 'pending', 'rejected', 'implemented'
+  rejectionReason: text("rejection_reason"),
   isIncorporated: boolean("is_incorporated").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });

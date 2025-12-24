@@ -7,7 +7,7 @@ import {
   type SystemPrompt, type InsertPromptFeedback, type InsertRefinedFeedback,
   type PromptFeedback, type RefinedFeedback
 } from "@shared/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, inArray } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 
@@ -37,6 +37,8 @@ export interface IStorage {
   createSystemPrompt(content: string, instructionsList?: string[]): Promise<SystemPrompt>;
   createPromptFeedback(feedback: InsertPromptFeedback): Promise<PromptFeedback>;
   createRefinedFeedback(feedback: InsertRefinedFeedback): Promise<RefinedFeedback>;
+  getPendingRefinedFeedback(): Promise<RefinedFeedback[]>;
+  markRefinedFeedbackAsImplemented(ids: number[]): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -133,6 +135,21 @@ export class DatabaseStorage implements IStorage {
   async createRefinedFeedback(feedback: InsertRefinedFeedback): Promise<RefinedFeedback> {
     const [entry] = await db.insert(refinedFeedback).values(feedback).returning();
     return entry;
+  }
+
+  async getPendingRefinedFeedback(): Promise<RefinedFeedback[]> {
+    return db
+      .select()
+      .from(refinedFeedback)
+      .where(eq(refinedFeedback.status, "pending"));
+  }
+
+  async markRefinedFeedbackAsImplemented(ids: number[]) {
+    if (ids.length === 0) return;
+    await db
+      .update(refinedFeedback)
+      .set({ status: "implemented", isIncorporated: true })
+      .where(inArray(refinedFeedback.id, ids));
   }
 }
 

@@ -163,6 +163,14 @@ Output ONLY the generated post content.`;
     }
   });
 
+  // --- Constitution ---
+  const CORE_CONSTITUTION = `
+  1. Professionalism: The AI must be professional, clear, and helpful.
+  2. Safety: It must not generate harmful, hate speech, or explicit content.
+  3. Utility: It should prioritize user intent but maintain high literary standards.
+  4. Consistency: It should not contradict previous core instructions unless explicitly correcting an error.
+  `;
+
   app.post("/api/feedback", requireAuth, async (req, res) => {
     try {
       const { feedback, rewriteId, isPositive } = req.body;
@@ -176,86 +184,115 @@ Output ONLY the generated post content.`;
         isPositive: !!isPositive
       });
 
-      const model = await getAIModel(); // Use current model for this admin task too
+      // 2. Constitutional Review & Scoring (Analysis Phase)
+      const reviewPrompt = `
+      You are the "Council of Editors" for an AI writing system.
+      Your task is to review a new piece of feedback against our Constitution.
 
-      // 2. Refine Feedback (AI Summary)
-      let refinedContent = "";
-      if (isPositive) {
-        // Positive Logic: Analyze why it's good
-        const reinforcementPrompt = `Analyze this positive user feedback about an AI writing assistant: "${feedback}". 
-         Summarize the specific stylistic trait or rule that the user liked.
-         Example: "User liked the concise tone. Instruction: Maintain a concise and direct tone."
-         Output ONLY the instruction to preserve.`;
+      Constitution:
+      ${CORE_CONSTITUTION}
 
-        const result = await model.generateContent(reinforcementPrompt);
-        refinedContent = result.response.text();
-      } else {
-        // Negative Logic: Fix it
-        const correctionPrompt = `Analyze this negative user feedback about an AI writing assistant: "${feedback}". 
-         Summarize the core complaint into a single, clear corrective instruction.
-         Example: "User complained about emojis. Instruction: Do not use emojis."
-         Output ONLY the instruction.`;
+      User Feedback: "${feedback}"
+      Type: ${isPositive ? "Positive (Reinforce)" : "Negative (Correct)"}
 
-        const result = await model.generateContent(correctionPrompt);
-        refinedContent = result.response.text();
-      }
+      Task:
+      1. Score (0-100): How constructive, safe, and aligned with the Constitution is this feedback?
+         - 0: Spam, nonsense, or harmful.
+         - 100: Critical insight or perfect reinforcement.
+         - Threshold to Pass: 70.
+      2. Refine: Extract the core instruction without emotions.
+      3. Categorize: Why did you accept/reject it?
 
-      const refinedEntry = await storage.createRefinedFeedback({
-        originalFeedbackId: rawFeedback.id,
-        refinedContent,
-        isIncorporated: true
-      });
-
-      // 3. Update System Prompt (Self-Improvement)
-      const currentPromptEntry = await storage.getActiveSystemPrompt();
-      const currentContent = currentPromptEntry?.content || SYSTEM_INSTRUCTION;
-      const currentList = currentPromptEntry?.instructionsList || [];
-
-      // We ask the AI to generate a JSON structure now to cleanly separate content from list
-      const updatePrompt = `You are an expert AI system architect. 
-      Your goal is to improve the System Instruction for an AI writer based on new feedback.
-      
-      mode: ${isPositive ? "REINFORCEMENT (Keep doing this)" : "CORRECTION (Stop/Start doing this)"}
-
-      Current System Content:
-      """
-      ${currentContent}
-      """
-
-      Current Instructions List:
-      ${JSON.stringify(currentList)}
-      
-      New Feedback Instruction:
-      "${refinedContent}"
-      
-      Task: Rewrite the System Instruction to incorporate the new feedback.
-      - If REINFORCEMENT: Ensure the "Current System Content" emphasizes this trait and add a supporting bullet point to the list if missing.
-      - If CORRECTION: Modify "Current System Content" to fix the issue and add a specific corrective bullet point to the list.
-      
       Output JSON ONLY:
       {
-        "content": "The full, updated main system prompt text (long form)",
-        "instructionsList": ["Array", "of", "specific", "rules", "including", "new", "one"]
+        "score": number, 
+        "status": "pending" | "rejected",
+        "rejectionReason": "string (if rejected) or null",
+        "refinedContent": "string (the clean instruction)"
       }`;
 
-      // Force JSON output
-      const jsonModel = genAI.getGenerativeModel({
+      const genModel = genAI.getGenerativeModel({
         model: "gemini-3-flash-preview",
         generationConfig: { responseMimeType: "application/json" }
       });
-      const updateResult = await jsonModel.generateContent(updatePrompt);
-      const updateResponse = JSON.parse(updateResult.response.text());
 
-      await storage.createSystemPrompt(updateResponse.content, updateResponse.instructionsList);
+      const reviewResult = await genModel.generateContent(reviewPrompt);
+      const reviewData = JSON.parse(reviewResult.response.text());
 
-      const message = isPositive
-        ? "Thanks! We've saved this preference to keep generating content you like."
-        : "We apologize. We have updated our system permissions to avoid this in the future.";
+      // 3. Save Decision
+      await storage.createRefinedFeedback({
+        originalFeedbackId: rawFeedback.id,
+        refinedContent: reviewData.refinedContent,
+        score: reviewData.score,
+        status: reviewData.score >= 70 ? "pending" : "rejected",
+        rejectionReason: reviewData.score < 70 ? (reviewData.rejectionReason || "Low Quality Score") : null,
+        isIncorporated: false
+      });
 
-      res.json({ message });
+      // 4. Batch Processing Check
+      // Only proceed if we have enough "pending" items
+      const pendingItems = await storage.getPendingRefinedFeedback();
+      const BATCH_THRESHOLD = 5;
+
+      if (pendingItems.length >= BATCH_THRESHOLD) {
+        console.log(`Batch threshold reached (${pendingItems.length}). Evolving System Prompt...`);
+
+        // Fetch current prompt state
+        const currentPromptEntry = await storage.getActiveSystemPrompt();
+        const currentContent = currentPromptEntry?.content || SYSTEM_INSTRUCTION;
+        const currentList = currentPromptEntry?.instructionsList || [];
+
+        // Formatting the batch for the AI
+        const batchText = pendingItems.map((item, idx) => `Item ${idx + 1}: ${item.refinedContent}`).join("\n");
+
+        const evolutionPrompt = `
+        You are the System Architect.
+        We have a new batch of verified, high-quality feedback items to incorporate into the System Instruction.
+
+        Current System Content:
+        """
+        ${currentContent}
+        """
+
+        Current Instructions List:
+        ${JSON.stringify(currentList)}
+
+        New Approved Batch of Insights:
+        ${batchText}
+
+        Task: Evolve the System Instruction.
+        1. Synthesize the new insights.
+        2. Resolve any conflicts in favor of the consensus or the most specific rule.
+        3. Remove outdated rules if they are contradicted by this new high-quality batch.
+        
+        Output JSON ONLY:
+        {
+          "content": "The updated main system prompt text",
+          "instructionsList": ["Array", "of", "updated", "specific", "rules"]
+        }`;
+
+        const evolutionResult = await genModel.generateContent(evolutionPrompt);
+        const evolutionData = JSON.parse(evolutionResult.response.text());
+
+        // Update DB
+        await storage.createSystemPrompt(evolutionData.content, evolutionData.instructionsList);
+
+        // Mark items as implemented
+        await storage.markRefinedFeedbackAsImplemented(pendingItems.map(p => p.id));
+      }
+
+      // 5. Response to User
+      // Note: We don't tell the user "it's pending", we say "received".
+      if (reviewData.status === 'rejected') {
+        // We still thank them, but maybe softly imply it wasn't used if we wanted full transparency. 
+        // For now, standard polite response is better for UX.
+        res.json({ message: "Thank you. Your feedback has been recorded." });
+      } else {
+        res.json({ message: "Thank you! Your feedback has been verified and will be part of the next system update." });
+      }
 
     } catch (err) {
-      console.error("Feedback loop error:", err);
+      console.error("Feedback governance error:", err);
       res.status(500).json({ message: "Failed to process feedback" });
     }
   });

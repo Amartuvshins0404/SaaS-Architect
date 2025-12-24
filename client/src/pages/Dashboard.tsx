@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Link } from "wouter";
 import { useSubmitFeedback } from "@/hooks/use-feedback";
+import { SEO } from "@/components/seo";
 import {
   Dialog,
   DialogContent,
@@ -98,6 +99,10 @@ export default function Dashboard() {
   return (
     <AppLayout>
       <div className="space-y-8">
+        <SEO
+          title="Dashboard"
+          description="Write faster with your custom AI Brand Voice. Generate threads, posts, and captions that sound 100% like you."
+        />
         <header>
           <h1 className="text-3xl font-display font-bold text-foreground">Dashboard</h1>
           <p className="text-muted-foreground">Transform your content using your custom brand voices.</p>

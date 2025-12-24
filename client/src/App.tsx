@@ -26,14 +26,18 @@ function Router() {
   );
 }
 
+import { HelmetProvider } from "react-helmet-async";
+
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Router />
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <HelmetProvider>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <Router />
+          <Toaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </HelmetProvider>
   );
 }
 
