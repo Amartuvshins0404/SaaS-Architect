@@ -1,4 +1,5 @@
 import "./types";
+import { SYSTEM_INSTRUCTION } from "./prompts";
 import "dotenv/config";
 import type { Express } from "express";
 import type { Server } from "http";
@@ -21,7 +22,10 @@ export async function registerRoutes(
 
   // Gemini Setup
   const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || "");
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+  const model = genAI.getGenerativeModel({
+    model: "gemini-3-flash-preview",
+    systemInstruction: SYSTEM_INSTRUCTION
+  });
 
   // Middleware to ensure auth
   const requireAuth = (req: any, res: any, next: any) => {
