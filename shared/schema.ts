@@ -28,6 +28,31 @@ export const rewrites = pgTable("rewrites", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const systemPrompts = pgTable("system_prompts", {
+  id: serial("id").primaryKey(),
+  content: text("content").notNull(),
+  instructionsList: text("instructions_list").array(), // Specific bullet points
+  isActive: boolean("is_active").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const promptFeedback = pgTable("prompt_feedback", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(), // User who gave feedback
+  rewriteId: integer("rewrite_id"), // Optional: linked to specific generation
+  feedback: text("feedback").notNull(),
+  isPositive: boolean("is_positive").default(false), // Sentiment
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const refinedFeedback = pgTable("refined_feedback", {
+  id: serial("id").primaryKey(),
+  originalFeedbackId: integer("original_feedback_id").notNull(), // Link to raw feedback
+  refinedContent: text("refined_content").notNull(),
+  isIncorporated: boolean("is_incorporated").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Schemas
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
@@ -46,6 +71,21 @@ export const insertRewriteSchema = createInsertSchema(rewrites).omit({
   createdAt: true
 });
 
+export const insertSystemPromptSchema = createInsertSchema(systemPrompts).omit({
+  id: true,
+  createdAt: true
+});
+
+export const insertPromptFeedbackSchema = createInsertSchema(promptFeedback).omit({
+  id: true,
+  createdAt: true
+});
+
+export const insertRefinedFeedbackSchema = createInsertSchema(refinedFeedback).omit({
+  id: true,
+  createdAt: true
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -55,6 +95,15 @@ export type InsertBrandVoice = z.infer<typeof insertBrandVoiceSchema>;
 
 export type Rewrite = typeof rewrites.$inferSelect;
 export type InsertRewrite = z.infer<typeof insertRewriteSchema>;
+
+export type SystemPrompt = typeof systemPrompts.$inferSelect;
+export type InsertSystemPrompt = z.infer<typeof insertSystemPromptSchema>;
+
+export type PromptFeedback = typeof promptFeedback.$inferSelect;
+export type InsertPromptFeedback = z.infer<typeof insertPromptFeedbackSchema>;
+
+export type RefinedFeedback = typeof refinedFeedback.$inferSelect;
+export type InsertRefinedFeedback = z.infer<typeof insertRefinedFeedbackSchema>;
 
 // API Request Types
 export type CreateBrandVoiceRequest = InsertBrandVoice;

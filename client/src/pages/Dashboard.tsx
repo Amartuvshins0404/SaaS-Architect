@@ -6,22 +6,36 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card } from "@/components/ui/card";
-import { Sparkles, Copy, Check, ArrowRight, Loader2 } from "lucide-react";
+import { Sparkles, Copy, Check, ArrowRight, Loader2, ThumbsDown, ThumbsUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Link } from "wouter";
-import { api } from "@shared/routes";
+import { useSubmitFeedback } from "@/hooks/use-feedback";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export default function Dashboard() {
   const { data: voices, isLoading: loadingVoices } = useBrandVoices();
   const { mutateAsync: createRewrite, isPending: generating } = useCreateRewrite();
+  const { mutateAsync: submitFeedback, isPending: submittingFeedback } = useSubmitFeedback();
   const { toast } = useToast();
 
   const [selectedVoice, setSelectedVoice] = useState<string>("");
   const [originalText, setOriginalText] = useState("");
   const [rewrittenText, setRewrittenText] = useState("");
   const [copied, setCopied] = useState(false);
+  const [lastRewriteId, setLastRewriteId] = useState<number | undefined>(undefined);
+
+  // Feedback State
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackType, setFeedbackType] = useState<"positive" | "negative">("negative");
+  const [feedbackText, setFeedbackText] = useState("");
 
   const [mode, setMode] = useState<"enhance" | "generate">("enhance");
   const [platform, setPlatform] = useState<"twitter" | "linkedin" | "general">("twitter");
@@ -44,6 +58,7 @@ export default function Dashboard() {
         platform
       });
       setRewrittenText(result.rewrittenText);
+      setLastRewriteId(result.id);
       toast({ title: "Success!", description: "Text rewritten successfully." });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message });
@@ -55,6 +70,29 @@ export default function Dashboard() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
     toast({ title: "Copied!", description: "Text copied to clipboard." });
+  };
+
+  const handleFeedbackSubmit = async () => {
+    if (!feedbackText.trim()) return;
+
+    try {
+      await submitFeedback({
+        feedback: feedbackText,
+        rewriteId: lastRewriteId,
+        isPositive: feedbackType === "positive"
+      });
+
+      setFeedbackOpen(false);
+      setFeedbackText("");
+      toast({
+        title: "Feedback Received",
+        description: feedbackType === "positive"
+          ? "Great! We'll remember what you liked."
+          : "We apologize. We are improving our system based on your feedback."
+      });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Error", description: "Failed to submit feedback" });
+    }
   };
 
   return (
@@ -152,17 +190,45 @@ export default function Dashboard() {
           <div className="flex flex-col gap-2 relative">
             <div className="flex items-center justify-between">
               <Label className="text-sm font-semibold text-primary">REWRITTEN RESULT</Label>
-              {rewrittenText && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={copyToClipboard}
-                  className="h-8 text-xs hover:bg-primary/10 hover:text-primary"
-                >
-                  {copied ? <Check className="mr-1 h-3 w-3" /> : <Copy className="mr-1 h-3 w-3" />}
-                  {copied ? "Copied" : "Copy Text"}
-                </Button>
-              )}
+              <div className="flex items-center gap-2">
+                {rewrittenText && (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setFeedbackType("positive");
+                        setFeedbackOpen(true);
+                      }}
+                      className="h-8 text-xs text-muted-foreground hover:text-green-600 hover:bg-green-50"
+                    >
+                      <ThumbsUp className="mr-1 h-3 w-3" />
+                      Good Result?
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setFeedbackType("negative");
+                        setFeedbackOpen(true);
+                      }}
+                      className="h-8 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                    >
+                      <ThumbsDown className="mr-1 h-3 w-3" />
+                      Bad Result?
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={copyToClipboard}
+                      className="h-8 text-xs hover:bg-primary/10 hover:text-primary"
+                    >
+                      {copied ? <Check className="mr-1 h-3 w-3" /> : <Copy className="mr-1 h-3 w-3" />}
+                      {copied ? "Copied" : "Copy Text"}
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
 
             <div className="flex-1 relative rounded-2xl border border-primary/10 bg-gradient-to-br from-primary/5 to-transparent p-6 shadow-inner">
@@ -180,6 +246,36 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      <Dialog open={feedbackOpen} onOpenChange={setFeedbackOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{feedbackType === "positive" ? "What did you like?" : "Report an Issue"}</DialogTitle>
+            <DialogDescription>
+              {feedbackType === "positive"
+                ? "Help us understand what worked well so we can do it more often."
+                : "Help us improve. What was wrong with this result? Be specific."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Textarea
+              placeholder={feedbackType === "positive"
+                ? "E.g. The tone was perfect, I liked the emoji usage..."
+                : "E.g. Too formal, used wrong emojis, didn't follow length constraints..."}
+              value={feedbackText}
+              onChange={(e) => setFeedbackText(e.target.value)}
+              className="resize-none"
+              rows={4}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFeedbackOpen(false)}>Cancel</Button>
+            <Button onClick={handleFeedbackSubmit} disabled={submittingFeedback || !feedbackText.trim()}>
+              {submittingFeedback ? <Loader2 className="h-4 w-4 animate-spin" /> : "Submit Feedback"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }

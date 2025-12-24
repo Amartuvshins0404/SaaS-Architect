@@ -11,6 +11,7 @@ import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth } from "./auth";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { insertPromptFeedbackSchema } from "@shared/schema";
 
 // Routes registration
 export async function registerRoutes(
@@ -22,10 +23,21 @@ export async function registerRoutes(
 
   // Gemini Setup
   const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || "");
-  const model = genAI.getGenerativeModel({
-    model: "gemini-3-flash-preview",
-    systemInstruction: SYSTEM_INSTRUCTION
-  });
+
+  // Initial Prompt Seeding
+  const activePrompt = await storage.getActiveSystemPrompt();
+  if (!activePrompt) {
+    console.log("No active system prompt found. Seeding with default.");
+    await storage.createSystemPrompt(SYSTEM_INSTRUCTION);
+  }
+
+  const getAIModel = async () => {
+    const prompt = await storage.getActiveSystemPrompt();
+    return genAI.getGenerativeModel({
+      model: "gemini-3-flash-preview",
+      systemInstruction: prompt?.content || SYSTEM_INSTRUCTION
+    });
+  };
 
   // Middleware to ensure auth
   const requireAuth = (req: any, res: any, next: any) => {
@@ -124,6 +136,7 @@ Output ONLY the generated post content.`;
       }
 
       try {
+        const model = await getAIModel();
         const result = await model.generateContent(prompt);
         const response = await result.response;
         rewrittenText = response.text();
@@ -147,6 +160,103 @@ Output ONLY the generated post content.`;
       }
       console.error(err);
       res.status(500).json({ message: "Internal Server Error" });
+    }
+  });
+
+  app.post("/api/feedback", requireAuth, async (req, res) => {
+    try {
+      const { feedback, rewriteId, isPositive } = req.body;
+      const userId = req.user!.id;
+
+      // 1. Store Raw Feedback
+      const rawFeedback = await storage.createPromptFeedback({
+        userId,
+        feedback,
+        rewriteId: rewriteId ? Number(rewriteId) : undefined,
+        isPositive: !!isPositive
+      });
+
+      const model = await getAIModel(); // Use current model for this admin task too
+
+      // 2. Refine Feedback (AI Summary)
+      let refinedContent = "";
+      if (isPositive) {
+        // Positive Logic: Analyze why it's good
+        const reinforcementPrompt = `Analyze this positive user feedback about an AI writing assistant: "${feedback}". 
+         Summarize the specific stylistic trait or rule that the user liked.
+         Example: "User liked the concise tone. Instruction: Maintain a concise and direct tone."
+         Output ONLY the instruction to preserve.`;
+
+        const result = await model.generateContent(reinforcementPrompt);
+        refinedContent = result.response.text();
+      } else {
+        // Negative Logic: Fix it
+        const correctionPrompt = `Analyze this negative user feedback about an AI writing assistant: "${feedback}". 
+         Summarize the core complaint into a single, clear corrective instruction.
+         Example: "User complained about emojis. Instruction: Do not use emojis."
+         Output ONLY the instruction.`;
+
+        const result = await model.generateContent(correctionPrompt);
+        refinedContent = result.response.text();
+      }
+
+      const refinedEntry = await storage.createRefinedFeedback({
+        originalFeedbackId: rawFeedback.id,
+        refinedContent,
+        isIncorporated: true
+      });
+
+      // 3. Update System Prompt (Self-Improvement)
+      const currentPromptEntry = await storage.getActiveSystemPrompt();
+      const currentContent = currentPromptEntry?.content || SYSTEM_INSTRUCTION;
+      const currentList = currentPromptEntry?.instructionsList || [];
+
+      // We ask the AI to generate a JSON structure now to cleanly separate content from list
+      const updatePrompt = `You are an expert AI system architect. 
+      Your goal is to improve the System Instruction for an AI writer based on new feedback.
+      
+      mode: ${isPositive ? "REINFORCEMENT (Keep doing this)" : "CORRECTION (Stop/Start doing this)"}
+
+      Current System Content:
+      """
+      ${currentContent}
+      """
+
+      Current Instructions List:
+      ${JSON.stringify(currentList)}
+      
+      New Feedback Instruction:
+      "${refinedContent}"
+      
+      Task: Rewrite the System Instruction to incorporate the new feedback.
+      - If REINFORCEMENT: Ensure the "Current System Content" emphasizes this trait and add a supporting bullet point to the list if missing.
+      - If CORRECTION: Modify "Current System Content" to fix the issue and add a specific corrective bullet point to the list.
+      
+      Output JSON ONLY:
+      {
+        "content": "The full, updated main system prompt text (long form)",
+        "instructionsList": ["Array", "of", "specific", "rules", "including", "new", "one"]
+      }`;
+
+      // Force JSON output
+      const jsonModel = genAI.getGenerativeModel({
+        model: "gemini-3-flash-preview",
+        generationConfig: { responseMimeType: "application/json" }
+      });
+      const updateResult = await jsonModel.generateContent(updatePrompt);
+      const updateResponse = JSON.parse(updateResult.response.text());
+
+      await storage.createSystemPrompt(updateResponse.content, updateResponse.instructionsList);
+
+      const message = isPositive
+        ? "Thanks! We've saved this preference to keep generating content you like."
+        : "We apologize. We have updated our system permissions to avoid this in the future.";
+
+      res.json({ message });
+
+    } catch (err) {
+      console.error("Feedback loop error:", err);
+      res.status(500).json({ message: "Failed to process feedback" });
     }
   });
 
@@ -177,6 +287,7 @@ Output ONLY the generated post content.`;
       4. DO NOT output the tweet itself. Output INSTURCTIONS for writing the tweet.
       5. Output ONLY the guidelines text.`;
 
+      const model = await getAIModel();
       const result = await model.generateContent(prompt);
       const response = await result.response;
       const guidelines = response.text();

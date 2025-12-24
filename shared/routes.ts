@@ -116,6 +116,19 @@ export const api = {
         400: errorSchemas.validation,
       },
     },
+    feedback: {
+      method: 'POST' as const,
+      path: '/api/feedback',
+      input: z.object({
+        feedback: z.string(),
+        rewriteId: z.number().optional(),
+        isPositive: z.boolean().optional(),
+      }),
+      responses: {
+        200: z.object({ message: z.string() }),
+        500: errorSchemas.internal,
+      },
+    },
   },
   ai: {
     generateGuidelines: {
