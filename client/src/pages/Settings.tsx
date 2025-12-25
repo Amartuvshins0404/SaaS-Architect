@@ -173,43 +173,51 @@ export default function Settings() {
               <CardDescription>Manage your billing and plan.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex items-center justify-between p-4 bg-primary/5 rounded-lg border border-primary/10">
-                <div>
-                  <p className="font-medium text-lg">Current Plan: {user?.subscriptionTier || "Free"}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {isPro ? "You have access to all premium features." : "You are on the basic tier."}
-                  </p>
-                </div>
-                {isPro ? (
+              {isPro ? (
+                <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center">
+                  <div className="flex items-center gap-2 text-green-500 font-medium bg-green-500/10 px-3 py-1.5 rounded-full w-fit">
+                    <Shield className="h-4 w-4" />
+                    Pro Plan Active
+                  </div>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button disabled={upgrading} variant="destructive" data-testid="button-cancel-plan">
-                        {upgrading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Cancel Plan
+                      <Button variant="outline" className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                        Cancel Subscription
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
-                        <AlertDialogTitle>Cancel Subscription?</AlertDialogTitle>
+                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                         <AlertDialogDescription>
-                          Are you sure you want to cancel your Pro subscription? You will lose access to premium features immediately.
+                          You will lose access to premium features immediately. Your account will revert to the Free plan.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel>Keep Subscription</AlertDialogCancel>
+                        <AlertDialogCancel>Keep Plan</AlertDialogCancel>
                         <AlertDialogAction onClick={handleCancelPlan} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                          Yes, Cancel
+                          {upgrading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                          Confirm Cancellation
                         </AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
-                ) : (
-                  <Button onClick={handleUpgradePlan} disabled={upgrading} data-testid="button-upgrade-pro">
-                    {upgrading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Upgrade to Pro
+                </div>
+              ) : (
+                <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
+                  <div>
+                    <p className="font-medium">Free Plan</p>
+                    <p className="text-sm text-muted-foreground">Upgrade to unlock full potential</p>
+                  </div>
+                  <Button onClick={handleUpgradePlan} disabled={upgrading} className="shadow-lg shadow-primary/25">
+                    {upgrading ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <CreditCard className="mr-2 h-4 w-4" />
+                    )}
+                    {user?.hasUsedTrial ? "Upgrade to Pro" : "Start 7-Day Free Trial"}
                   </Button>
-                )}
-              </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 

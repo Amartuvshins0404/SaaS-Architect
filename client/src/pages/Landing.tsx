@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
   Sparkles,
@@ -16,6 +17,14 @@ import {
 } from "lucide-react";
 
 export default function Landing() {
+  const { data: products } = useQuery<any>({
+    queryKey: ['/api/products'],
+  });
+
+  const proPrice = products?.[0]?.unit_amount
+    ? `$${(products[0].unit_amount / 100).toFixed(2)}`
+    : "$4.90";
+
   return (
     <div className="min-h-screen bg-background font-sans selection:bg-primary/20 overflow-hidden">
       {/* Navigation */}
@@ -381,15 +390,19 @@ export default function Landing() {
               </div>
               <h3 className="font-display text-2xl font-bold mb-2">Pro</h3>
               <p className="text-muted-foreground mb-6">For growing teams</p>
+
               <div className="text-4xl font-bold mb-8">
-                $29<span className="text-lg text-muted-foreground">/mo</span>
+                {proPrice}<span className="text-lg text-muted-foreground">/mo</span>
+              </div>
+              <div className="mb-4 text-sm font-medium text-primary">
+                Includes 7-day free trial
               </div>
               <Link href="/auth">
                 <Button
                   className="w-full mb-8 bg-primary hover:bg-primary/90"
                   data-testid="button-pricing-pro"
                 >
-                  Start Free Trial
+                  Start 7-Day Free Trial
                 </Button>
               </Link>
               <div className="space-y-3">

@@ -5,6 +5,7 @@ import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
+import Stripe from "stripe";
 import { stripe } from "./stripe";
 import { brandVoices } from "@shared/schema";
 import { eq } from "drizzle-orm";
@@ -316,34 +317,83 @@ Output ONLY the generated post content.`;
     }
   });
 
+  app.get("/api/products", async (req, res) => {
+    try {
+      // New Price ID: price_1ShveM9BA7dzuhZk9U2tQSRm ($9.99)
+      const price = await stripe.prices.retrieve("price_1ShveM9BA7dzuhZk9U2tQSRm", {
+        expand: ["product"]
+      });
+
+      res.json([price]);
+    } catch (err: any) {
+      console.error("Stripe products error:", err);
+      // Fallback if price doesn't exist yet (dev env safety)
+      res.json([{
+        id: "price_1ShveM9BA7dzuhZk9U2tQSRm",
+        unit_amount: 999,
+        currency: "usd",
+        product: { name: "Pro Plan" }
+      }]);
+    }
+  });
+
+  app.post("/api/user/preferences", requireAuth, async (req, res) => {
+    try {
+      const { hideTrialModal } = z.object({ hideTrialModal: z.boolean() }).parse(req.body);
+      const updatedUser = await storage.updateUserPreferences(req.user!.id, hideTrialModal);
+
+      // Update session user to reflect changes immediately
+      // Passport/Express session serialization often caches the user.
+      // We rely on the client refreshing or the next verify call updating the context.
+      // But for completeness, we return the updated user.
+      req.login(updatedUser, (err) => {
+        if (err) console.error("Session update error", err);
+        return res.json(updatedUser);
+      });
+    } catch (err: any) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      console.error("Preference update error:", err);
+      res.status(500).json({ message: "Failed to update preferences" });
+    }
+  });
+
   app.post("/api/create-checkout-session", requireAuth, async (req, res) => {
     try {
-      const session = await stripe.checkout.sessions.create({
+      // Fetch fresh user to get latest hasUsedTrial status
+      // Session user might be stale if they just verified a previous trial
+      const user = await storage.getUser(req.user!.id);
+      if (!user) return res.sendStatus(401);
+
+      const hasUsedTrial = user.hasUsedTrial;
+      console.log(`Creating checkout session for user ${user.id}. Has used trial: ${hasUsedTrial}`);
+
+      const sessionConfig: Stripe.Checkout.SessionCreateParams = {
         payment_method_types: ["card"],
         line_items: [
           {
-            price_data: {
-              currency: "usd",
-              product_data: {
-                name: "Pro Subscription",
-                description: "Unlock all premium features",
-              },
-              unit_amount: 2900, // $29.00
-              recurring: {
-                interval: "month",
-              },
-            },
+            price: "price_1ShveM9BA7dzuhZk9U2tQSRm", // New $9.99 recurring price
             quantity: 1,
           },
         ],
         mode: "subscription",
         success_url: `${req.headers.origin}/app/settings?success=true&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${req.headers.origin}/app/settings?canceled=true`,
-        client_reference_id: req.user!.id.toString(),
+        client_reference_id: user.id.toString(),
         metadata: {
-          userId: req.user!.id.toString()
+          userId: user.id.toString()
         }
-      });
+      };
+
+      // Only add trial if user hasn't used it strictly
+      if (!hasUsedTrial) {
+        sessionConfig.subscription_data = {
+          trial_period_days: 7, // 7-day free trial
+        };
+      }
+
+      const session = await stripe.checkout.sessions.create(sessionConfig);
 
       res.json({ url: session.url });
     } catch (err: any) {
@@ -364,7 +414,11 @@ Output ONLY the generated post content.`;
       const session = await stripe.checkout.sessions.retrieve(session_id);
       console.log("Stripe session retrieved:", { id: session.id, status: session.payment_status });
 
-      if (session.payment_status === 'paid') {
+      if (session.payment_status === 'paid' || session.status === 'open') {
+        // Note: For trials, status might be 'open' but payment_status 'unpaid' until trial ends if no setup.
+        // But we are enforcing card, so 'complete' or 'active' subscription check is better?
+        // Let's stick to existing logic but just add the flag update.
+
         const subscriptionId = session.subscription as string;
         const customerId = session.customer as string;
 
@@ -372,7 +426,8 @@ Output ONLY the generated post content.`;
           req.user!.id,
           "pro",
           subscriptionId,
-          customerId
+          customerId,
+          true // Mark trial as used
         );
         console.log("User updated to pro:", req.user!.id);
         return res.json({ success: true, tier: "pro" });

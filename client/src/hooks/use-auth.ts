@@ -7,6 +7,8 @@ export interface User {
   id: number;
   username: string;
   subscriptionTier: string;
+  hideTrialModal?: boolean;
+  hasUsedTrial?: boolean;
 }
 
 export function useAuth() {
@@ -30,7 +32,7 @@ export function useAuth() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(credentials),
       });
-      
+
       if (!res.ok) {
         // Parse error message if available
         try {
@@ -66,7 +68,7 @@ export function useAuth() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(credentials),
       });
-      
+
       if (!res.ok) {
         try {
           const errorData = await res.json();

@@ -9,6 +9,8 @@ export const users = pgTable("users", {
   subscriptionTier: text("subscription_tier").default("free"),
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
+  hideTrialModal: boolean("hide_trial_modal").default(false),
+  hasUsedTrial: boolean("has_used_trial").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

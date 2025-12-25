@@ -1,4 +1,5 @@
 import { Sidebar } from "./Sidebar";
+import { FreeTrialModal } from "@/components/modals/FreeTrialModal";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
 import { Redirect } from "wouter";
@@ -30,6 +31,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           {children}
         </div>
       </main>
+      <FreeTrialModal />
     </div>
   );
 }

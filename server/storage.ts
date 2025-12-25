@@ -22,7 +22,8 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUserPassword(id: number, password: string): Promise<void>;
-  updateUserSubscription(id: number, tier: string, stripeSubscriptionId?: string, stripeCustomerId?: string): Promise<void>;
+  updateUserSubscription(userId: number, tier: string, subscriptionId?: string, customerId?: string, hasUsedTrial?: boolean): Promise<User>;
+  updateUserPreferences(userId: number, hideTrialModal: boolean): Promise<User>; // New method
 
   // Brand Voices
   getBrandVoices(userId: number): Promise<BrandVoice[]>;
@@ -79,13 +80,21 @@ export class DatabaseStorage implements IStorage {
     await db.update(users).set({ password }).where(eq(users.id, id));
   }
 
-  async updateUserSubscription(id: number, tier: string, stripeSubscriptionId?: string, stripeCustomerId?: string): Promise<void> {
+  async updateUserSubscription(id: number, tier: string, stripeSubscriptionId?: string, stripeCustomerId?: string, hasUsedTrial?: boolean): Promise<User> {
     const updateData: any = { subscriptionTier: tier };
     if (stripeSubscriptionId) updateData.stripeSubscriptionId = stripeSubscriptionId;
     if (stripeCustomerId) updateData.stripeCustomerId = stripeCustomerId;
+    if (hasUsedTrial !== undefined) updateData.hasUsedTrial = hasUsedTrial;
 
-    await db.update(users).set(updateData).where(eq(users.id, id));
+    const [updated] = await db.update(users).set(updateData).where(eq(users.id, id)).returning();
+    return updated;
   }
+
+  async updateUserPreferences(userId: number, hideTrialModal: boolean): Promise<User> {
+    const [updated] = await db.update(users).set({ hideTrialModal }).where(eq(users.id, userId)).returning();
+    return updated;
+  }
+
 
   // Brand Voices
   async getBrandVoices(userId: number): Promise<BrandVoice[]> {
