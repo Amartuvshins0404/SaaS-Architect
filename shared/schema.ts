@@ -20,6 +20,7 @@ export const brandVoices = pgTable("brand_voices", {
   name: text("name").notNull(),
   guidelines: text("guidelines").notNull(),
   toneTags: text("tone_tags").array(), // Array of strings
+  aiLearnedGuidelines: text("ai_learned_guidelines").array(), // Array of strings - AI learned rules from feedback
   createdAt: timestamp("created_at").defaultNow(),
 });
 

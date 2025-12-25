@@ -90,6 +90,8 @@ export async function registerRoutes(
 
   // --- Rewrites / Gemini ---
 
+  // --- Rewrites / Gemini ---
+
   app.get(api.rewrites.list.path, requireAuth, async (req, res) => {
     const list = await storage.getRewrites(req.user!.id);
     res.json(list);
@@ -107,11 +109,14 @@ export async function registerRoutes(
       // Call Gemini
       let prompt = "";
       const tone = voice.toneTags?.join(", ") || "standard";
+      const learnedRules = (voice.aiLearnedGuidelines || []).map(r => `- ${r}`).join("\n");
+      const learnedSection = learnedRules ? `\n\nCRITICAL AI LEARNED GUIDELINES (Must Follow): \n${learnedRules} \n\n` : "";
 
       if (mode === "enhance") {
         prompt = `You are a social media expert. Rewrite the following text to match this brand voice.
 Brand Guidelines: ${voice.guidelines}
 Tone: ${tone}
+${learnedSection}
 Platform: ${platform} (Optimize for this platform's best practices).
 ${platform === "twitter" ? "- Ensure it's under 280 characters if possible, or threaded if longer.\n- Use engaging hooks.\n- Use minimal hashtags." : ""}
 
@@ -125,6 +130,7 @@ Output ONLY the rewritten text.`;
 Topic: ${originalText}
 Brand Guidelines: ${voice.guidelines}
 Tone: ${tone}
+${learnedSection}
 Platform: ${platform} (Optimize for this platform's best practices).
 ${platform === "twitter" ? "- Create a viral quality tweet/thread.\n- Limit to 280 chars per tweet.\n- Focus on high engagement." : ""}
 
@@ -186,112 +192,57 @@ Output ONLY the generated post content.`;
         isPositive: !!isPositive
       });
 
-      // 2. Constitutional Review & Scoring (Analysis Phase)
-      const reviewPrompt = `
-      You are the "Council of Editors" for an AI writing system.
-      Your task is to review a new piece of feedback against our Constitution.
+      // If positive, we might just strengthen existing weights (not implemented yet), 
+      // but if Negative, we need to extract a rule.
+      if (!isPositive && rewriteId) {
+        const rewrite = await storage.getRewrite(Number(rewriteId));
+        if (rewrite && rewrite.brandVoiceId) {
+          const voice = await storage.getBrandVoice(rewrite.brandVoiceId);
+          if (voice) {
+            // 2. Constitutional Review & Rule Extraction
+            const reviewPrompt = `
+            You are a "Brand Voice Architect". 
+            A user gave negative feedback on a generation. You need to extract a **Specific Style Rule** that fixes this for future generations.
 
-      Constitution:
-      ${CORE_CONSTITUTION}
+            User Feedback: "${feedback}"
+            Original Text: "${rewrite.originalText}"
+            Generated Text: "${rewrite.rewrittenText}"
+            
+            Task:
+            1. Analyze why the user unhappy.
+            2. Formulate a SINGLE, concise, actionable rule for the AI. (e.g., "Never use emojis.", "Always be more empathetic.")
+            3. Ensure the rule is safe and aligned with general utility.
 
-      User Feedback: "${feedback}"
-      Type: ${isPositive ? "Positive (Reinforce)" : "Negative (Correct)"}
+            Output JSON ONLY:
+            {
+              "rule": "string - the new rule",
+              "valid": boolean // true if feedback is actionable and not spam
+            }`;
 
-      Task:
-      1. Score (0-100): How constructive, safe, and aligned with the Constitution is this feedback?
-         - 0: Spam, nonsense, or harmful.
-         - 100: Critical insight or perfect reinforcement.
-         - Threshold to Pass: 70.
-      2. Refine: Extract the core instruction without emotions.
-      3. Categorize: Why did you accept/reject it?
+            const genModel = genAI.getGenerativeModel({
+              model: "gemini-3-flash-preview",
+              generationConfig: { responseMimeType: "application/json" }
+            });
 
-      Output JSON ONLY:
-      {
-        "score": number, 
-        "status": "pending" | "rejected",
-        "rejectionReason": "string (if rejected) or null",
-        "refinedContent": "string (the clean instruction)"
-      }`;
+            const reviewResult = await genModel.generateContent(reviewPrompt);
+            const reviewData = JSON.parse(reviewResult.response.text());
 
-      const genModel = genAI.getGenerativeModel({
-        model: "gemini-3-flash-preview",
-        generationConfig: { responseMimeType: "application/json" }
-      });
-
-      const reviewResult = await genModel.generateContent(reviewPrompt);
-      const reviewData = JSON.parse(reviewResult.response.text());
-
-      // 3. Save Decision
-      await storage.createRefinedFeedback({
-        originalFeedbackId: rawFeedback.id,
-        refinedContent: reviewData.refinedContent,
-        score: reviewData.score,
-        status: reviewData.score >= 70 ? "pending" : "rejected",
-        rejectionReason: reviewData.score < 70 ? (reviewData.rejectionReason || "Low Quality Score") : null,
-        isIncorporated: false
-      });
-
-      // 4. Batch Processing Check
-      // Only proceed if we have enough "pending" items
-      const pendingItems = await storage.getPendingRefinedFeedback();
-      const BATCH_THRESHOLD = 5;
-
-      if (pendingItems.length >= BATCH_THRESHOLD) {
-        console.log(`Batch threshold reached (${pendingItems.length}). Evolving System Prompt...`);
-
-        // Fetch current prompt state
-        const currentPromptEntry = await storage.getActiveSystemPrompt();
-        const currentContent = currentPromptEntry?.content || SYSTEM_INSTRUCTION;
-        const currentList = currentPromptEntry?.instructionsList || [];
-
-        // Formatting the batch for the AI
-        const batchText = pendingItems.map((item, idx) => `Item ${idx + 1}: ${item.refinedContent}`).join("\n");
-
-        const evolutionPrompt = `
-        You are the System Architect.
-        We have a new batch of verified, high-quality feedback items to incorporate into the System Instruction.
-
-        Current System Content:
-        """
-        ${currentContent}
-        """
-
-        Current Instructions List:
-        ${JSON.stringify(currentList)}
-
-        New Approved Batch of Insights:
-        ${batchText}
-
-        Task: Evolve the System Instruction.
-        1. Synthesize the new insights.
-        2. Resolve any conflicts in favor of the consensus or the most specific rule.
-        3. Remove outdated rules if they are contradicted by this new high-quality batch.
-        
-        Output JSON ONLY:
-        {
-          "content": "The updated main system prompt text",
-          "instructionsList": ["Array", "of", "updated", "specific", "rules"]
-        }`;
-
-        const evolutionResult = await genModel.generateContent(evolutionPrompt);
-        const evolutionData = JSON.parse(evolutionResult.response.text());
-
-        // Update DB
-        await storage.createSystemPrompt(evolutionData.content, evolutionData.instructionsList);
-
-        // Mark items as implemented
-        await storage.markRefinedFeedbackAsImplemented(pendingItems.map(p => p.id));
+            if (reviewData.valid && reviewData.rule) {
+              // 3. Update Brand Voice immediately directly
+              // (We are bypassing the complex batch "system prompt" evolution for a direct "user preference" evolution)
+              let currentRules = voice.aiLearnedGuidelines || [];
+              // Avoid duplicates
+              if (!currentRules.includes(reviewData.rule)) {
+                currentRules.push(reviewData.rule);
+                await storage.updateBrandVoice(voice.id, { aiLearnedGuidelines: currentRules });
+                console.log(`[Self-Refine] Added new rule to Voice ${voice.id}: ${reviewData.rule}`);
+              }
+            }
+          }
+        }
       }
 
-      // 5. Response to User
-      // Note: We don't tell the user "it's pending", we say "received".
-      if (reviewData.status === 'rejected') {
-        // We still thank them, but maybe softly imply it wasn't used if we wanted full transparency. 
-        // For now, standard polite response is better for UX.
-        res.json({ message: "Thank you. Your feedback has been recorded." });
-      } else {
-        res.json({ message: "Thank you! Your feedback has been verified and will be part of the next system update." });
-      }
+      res.json({ message: "Thank you! Your feedback adjusts your brand voice." });
 
     } catch (err) {
       console.error("Feedback governance error:", err);

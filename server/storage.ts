@@ -35,6 +35,7 @@ export interface IStorage {
 
   // Rewrites
   getRewrites(userId: number): Promise<Rewrite[]>;
+  getRewrite(id: number): Promise<Rewrite | undefined>;
   createRewrite(userId: number, rewrite: InsertRewrite): Promise<Rewrite>;
 
   // System Prompts & Feedback
@@ -128,6 +129,11 @@ export class DatabaseStorage implements IStorage {
   async createRewrite(userId: number, rewrite: InsertRewrite): Promise<Rewrite> {
     const [newRewrite] = await db.insert(rewrites).values({ ...rewrite, userId }).returning();
     return newRewrite;
+  }
+
+  async getRewrite(id: number): Promise<Rewrite | undefined> {
+    const [rewrite] = await db.select().from(rewrites).where(eq(rewrites.id, id));
+    return rewrite;
   }
 
   // System Prompts & Feedback
