@@ -21,6 +21,24 @@ export const brandVoices = pgTable("brand_voices", {
   guidelines: text("guidelines").notNull(),
   toneTags: text("tone_tags").array(), // Array of strings
   aiLearnedGuidelines: text("ai_learned_guidelines").array(), // Array of strings - AI learned rules from feedback
+  isPublic: boolean("is_public").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const voiceVotes = pgTable("voice_votes", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  brandVoiceId: integer("brand_voice_id").notNull(),
+  voteType: integer("vote_type").notNull(), // 1 for upvote, -1 for downvote
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const voiceReviews = pgTable("voice_reviews", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  brandVoiceId: integer("brand_voice_id").notNull(),
+  content: text("content").notNull(),
+  rating: integer("rating").default(0), // 1-5
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -81,6 +99,16 @@ export const insertBrandVoiceSchema = createInsertSchema(brandVoices).omit({
   createdAt: true
 });
 
+export const insertVoiceVoteSchema = createInsertSchema(voiceVotes).omit({
+  id: true,
+  createdAt: true
+});
+
+export const insertVoiceReviewSchema = createInsertSchema(voiceReviews).omit({
+  id: true,
+  createdAt: true
+});
+
 export const insertRewriteSchema = createInsertSchema(rewrites).omit({
   id: true,
   userId: true,
@@ -108,6 +136,12 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 
 export type BrandVoice = typeof brandVoices.$inferSelect;
 export type InsertBrandVoice = z.infer<typeof insertBrandVoiceSchema>;
+
+export type VoiceVote = typeof voiceVotes.$inferSelect;
+export type InsertVoiceVote = z.infer<typeof insertVoiceVoteSchema>;
+
+export type VoiceReview = typeof voiceReviews.$inferSelect;
+export type InsertVoiceReview = z.infer<typeof insertVoiceReviewSchema>;
 
 export type Rewrite = typeof rewrites.$inferSelect;
 export type InsertRewrite = z.infer<typeof insertRewriteSchema>;

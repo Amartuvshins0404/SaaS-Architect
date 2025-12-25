@@ -10,6 +10,7 @@ import {
   Sparkles,
   Command,
   MessageSquare,
+  Globe,
   Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,7 @@ export function Sidebar() {
   const navigation = [
     { name: "Dashboard", href: "/app/dashboard", icon: LayoutDashboard },
     { name: "Brand Voices", href: "/app/voices", icon: Mic2 },
+    { name: "Community", href: "/app/community", icon: Globe },
     { name: "History", href: "/app/history", icon: History },
     { name: "Settings", href: "/app/settings", icon: Settings },
   ];

@@ -6,9 +6,10 @@ import {
   type Rewrite, type InsertRewrite,
   type SystemPrompt, type InsertPromptFeedback, type InsertRefinedFeedback,
   type PromptFeedback, type RefinedFeedback, type UserFeedback, type InsertUserFeedback,
-  userFeedback
+  type VoiceReview, type InsertVoiceReview, type VoiceVote, type InsertVoiceVote,
+  userFeedback, voiceVotes, voiceReviews
 } from "@shared/schema";
-import { eq, desc, inArray } from "drizzle-orm";
+import { eq, desc, inArray, and } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 
@@ -49,6 +50,13 @@ export interface IStorage {
 
   // User Feedback
   createUserFeedback(feedback: InsertUserFeedback): Promise<UserFeedback>;
+
+  // Community
+  getPublicBrandVoices(limit?: number, offset?: number, sort?: "popular" | "newest"): Promise<(BrandVoice & { authorName: string | null; voteCount: number; reviewCount: number; rating: number })[]>;
+  setBrandVoicePublic(id: number, isPublic: boolean): Promise<BrandVoice>;
+  voteOnVoice(userId: number, brandVoiceId: number, voteType: number): Promise<void>;
+  createVoiceReview(review: InsertVoiceReview): Promise<VoiceReview>;
+  getUserVote(userId: number, brandVoiceId: number): Promise<number>; // Returns voteType or 0
 }
 
 export class DatabaseStorage implements IStorage {
@@ -190,6 +198,101 @@ export class DatabaseStorage implements IStorage {
   async createUserFeedback(feedback: InsertUserFeedback): Promise<UserFeedback> {
     const [entry] = await db.insert(userFeedback).values(feedback).returning();
     return entry;
+  }
+
+  // Community
+  async getPublicBrandVoices(limit: number = 20, offset: number = 0, sort: "popular" | "newest" = "popular"): Promise<(BrandVoice & { authorName: string | null; voteCount: number; reviewCount: number; rating: number })[]> {
+    // Ideally this would be a complex SQL join.
+    // For MVP with Drizzle, we might do separate queries or a raw query, 
+    // but let's try to construct it or do post-processing if volume is low.
+    // Given the request for "fundamental level", we should try to be efficient.
+
+    // Let's use a simpler approach: Fetch public voices, then fetch stats for them. 
+    // Or simpler: Fetch all, and loop (N+1 problem but fine for MVP < 100 items).
+    // BETTER: Use raw SQL or Drizzle's sophisticated selections.
+
+    const voices = await db.select({
+      voice: brandVoices,
+      author: users.username,
+    })
+      .from(brandVoices)
+      .leftJoin(users, eq(brandVoices.userId, users.id))
+      .where(eq(brandVoices.isPublic, true))
+      .limit(limit)
+      .offset(offset);
+
+    // Fetch stats for these voices
+    // We can just calculate them on the fly for now or do a second query.
+    // Let's do a second query for all votes/reviews related to these IDs.
+
+    const results = await Promise.all(voices.map(async ({ voice, author }) => {
+      const votes = await db.select().from(voiceVotes).where(eq(voiceVotes.brandVoiceId, voice.id));
+      const reviews = await db.select().from(voiceReviews).where(eq(voiceReviews.brandVoiceId, voice.id));
+
+      const voteCount = votes.reduce((acc, v) => acc + v.voteType, 0);
+      const rating = reviews.length > 0
+        ? reviews.reduce((acc, r) => acc + (r.rating || 0), 0) / reviews.length
+        : 0;
+
+      return {
+        ...voice,
+        authorName: author,
+        voteCount,
+        reviewCount: reviews.length,
+        rating
+      };
+    }));
+
+    if (sort === "popular") {
+      results.sort((a, b) => b.voteCount - a.voteCount);
+    } else {
+      results.sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime()); // Newest first
+    }
+
+    return results;
+  }
+
+  async setBrandVoicePublic(id: number, isPublic: boolean): Promise<BrandVoice> {
+    const [updated] = await db.update(brandVoices).set({ isPublic }).where(eq(brandVoices.id, id)).returning();
+    return updated;
+  }
+
+  async voteOnVoice(userId: number, brandVoiceId: number, voteType: number): Promise<void> {
+    // Check if vote exists
+    // We handle unique constraint manually or let DB explode? 
+    // Let's check first to toggle or update.
+
+    // Actually, unique constraint is (userId, brandVoiceId).
+    // If we want to allow changing vote, we should update.
+    // Drizzle has upsert but let's be explicit.
+
+    const [existing] = await db.select().from(voiceVotes).where(
+      and(eq(voiceVotes.userId, userId), eq(voiceVotes.brandVoiceId, brandVoiceId))
+    );
+
+    if (existing) {
+      if (existing.voteType === voteType) {
+        // Toggle off if same vote? Or just keep it? Let's just keep/update.
+        // If user clicks upvote again, maybe nothing? Or remove?
+        // Standard: Update.
+        return;
+      }
+      await db.update(voiceVotes).set({ voteType }).where(eq(voiceVotes.id, existing.id));
+    } else {
+      await db.insert(voiceVotes).values({ userId, brandVoiceId, voteType });
+    }
+  }
+
+  async createVoiceReview(review: InsertVoiceReview): Promise<VoiceReview> {
+    const [entry] = await db.insert(voiceReviews).values(review).returning();
+    return entry;
+  }
+
+  async getUserVote(userId: number, brandVoiceId: number): Promise<number> {
+    const [vote] = await db.select().from(voiceVotes).where(
+      and(eq(voiceVotes.userId, userId), eq(voiceVotes.brandVoiceId, brandVoiceId))
+    );
+    return vote ? vote.voteType : 0;
   }
 }
 

@@ -144,6 +144,56 @@ export const api = {
       },
     }
   },
+  community: {
+    list: {
+      method: "GET" as const,
+      path: "/api/community/voices",
+      input: z.object({
+        limit: z.coerce.number().optional(),
+        offset: z.coerce.number().optional(),
+        sort: z.enum(["popular", "newest"]).optional(),
+      }).optional(),
+      responses: {
+        200: z.array(z.custom<typeof brandVoices.$inferSelect & { authorName: string | null; voteCount: number; reviewCount: number; rating: number; hasVoted: number }>()),
+      },
+    },
+    publish: {
+      method: "POST" as const,
+      path: "/api/brand-voices/:id/publish",
+      input: z.object({ isPublic: z.boolean() }),
+      responses: {
+        200: z.custom<typeof brandVoices.$inferSelect>(),
+        403: errorSchemas.validation,
+        404: errorSchemas.notFound,
+      },
+    },
+    vote: {
+      method: "POST" as const,
+      path: "/api/community/voices/:id/vote",
+      input: z.object({ voteType: z.number().min(-1).max(1) }),
+      responses: {
+        200: z.object({ success: z.boolean() }),
+        404: errorSchemas.notFound,
+      },
+    },
+    review: {
+      method: "POST" as const,
+      path: "/api/community/voices/:id/review",
+      input: z.object({ content: z.string().min(1), rating: z.number().min(1).max(5) }),
+      responses: {
+        201: z.custom<{ id: number; content: string; rating: number; createdAt: string }>(),
+        400: errorSchemas.validation,
+      },
+    },
+    clone: {
+      method: "POST" as const,
+      path: "/api/community/voices/:id/clone",
+      responses: {
+        201: z.custom<typeof brandVoices.$inferSelect>(),
+        404: errorSchemas.notFound,
+      },
+    },
+  },
 };
 
 export function buildUrl(path: string, params?: Record<string, string | number>): string {

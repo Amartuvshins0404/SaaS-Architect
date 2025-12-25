@@ -102,8 +102,9 @@ export async function registerRoutes(
       const { brandVoiceId, originalText, mode = "enhance", platform = "twitter" } = api.rewrites.create.input.parse(req.body);
 
       const voice = await storage.getBrandVoice(brandVoiceId);
-      if (!voice || voice.userId !== req.user!.id) {
-        return res.status(404).json({ message: "Brand voice not found" });
+      // Allow if owner OR if voice is public
+      if (!voice || (voice.userId !== req.user!.id && !voice.isPublic)) {
+        return res.status(404).json({ message: "Brand voice not found or not accessible" });
       }
 
       // Call Gemini
@@ -460,6 +461,102 @@ Output ONLY the generated post content.`;
         return res.status(400).json({ message: "Invalid input data" });
       }
       res.status(500).json({ message: "AI Generation failed: " + (error as Error).message });
+    }
+  });
+
+  // --- Community API ---
+
+  app.get(api.community.list.path, async (req, res) => {
+    try {
+      const { limit, offset, sort } = api.community.list.input?.parse(req.query) || {};
+      const voices = await storage.getPublicBrandVoices(limit, offset, sort);
+
+      // If user is logged in, attach "hasVoted" status
+      // This is N+1 but okay for now
+      if (req.isAuthenticated()) {
+        const enriched = await Promise.all(voices.map(async (v) => {
+          const hasVoted = await storage.getUserVote(req.user!.id, v.id);
+          return { ...v, hasVoted };
+        }));
+        return res.json(enriched);
+      }
+
+      const enriched = voices.map(v => ({ ...v, hasVoted: 0 }));
+      res.json(enriched);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to fetch community voices" });
+    }
+  });
+
+  app.post(api.community.publish.path, requireAuth, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const { isPublic } = api.community.publish.input.parse(req.body);
+
+      // Ownership check
+      const existing = await storage.getBrandVoice(id);
+      if (!existing || existing.userId !== req.user!.id) {
+        return res.status(404).json({ message: "Voice not found" });
+      }
+
+      const updated = await storage.setBrandVoicePublic(id, isPublic);
+      res.json(updated);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to update visibility" });
+    }
+  });
+
+  app.post(api.community.vote.path, requireAuth, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const { voteType } = api.community.vote.input.parse(req.body);
+      await storage.voteOnVoice(req.user!.id, id, voteType);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ message: "Vote failed" });
+    }
+  });
+
+  app.post(api.community.review.path, requireAuth, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const input = api.community.review.input.parse(req.body);
+
+      const review = await storage.createVoiceReview({
+        userId: req.user!.id,
+        brandVoiceId: id,
+        ...input
+      });
+      res.status(201).json(review);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      res.status(500).json({ message: "Review failed" });
+    }
+  });
+
+  app.post(api.community.clone.path, requireAuth, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const source = await storage.getBrandVoice(id);
+      if (!source || !source.isPublic) {
+        return res.status(404).json({ message: "Voice not found or private" });
+      }
+
+      const cloned = await storage.createBrandVoice(req.user!.id, {
+        name: `${source.name} (Copy)`,
+        guidelines: source.guidelines,
+        toneTags: source.toneTags,
+        // We do not copy AI learned guidelines for now, start fresh? 
+        // Or maybe we should? Let's copy them as a starting point.
+        aiLearnedGuidelines: source.aiLearnedGuidelines
+      });
+
+      res.status(201).json(cloned);
+    } catch (err) {
+      res.status(500).json({ message: "Clone failed" });
     }
   });
 
