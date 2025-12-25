@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sparkles, Copy, Check, ArrowRight, Loader2, ThumbsDown, ThumbsUp } from "lucide-react";
+import { Sparkles, Copy, Check, ArrowRight, Loader2, ThumbsDown, ThumbsUp, Lightbulb } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Link } from "wouter";
@@ -60,7 +60,7 @@ export default function Dashboard() {
       });
       setRewrittenText(result.rewrittenText);
       setLastRewriteId(result.id);
-      toast({ title: "Success!", description: "Text rewritten successfully." });
+      toast({ title: "Success!", description: "Text generated successfully." });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message });
     }
@@ -107,6 +107,14 @@ export default function Dashboard() {
           <h1 className="text-3xl font-display font-bold text-foreground">Dashboard</h1>
           <p className="text-muted-foreground">Transform your content using your custom brand voices.</p>
         </header>
+
+        {/* Mode Toggles */}
+        <Tabs defaultValue="enhance" value={mode} onValueChange={(v) => setMode(v as any)} className="w-full max-w-[400px]">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="enhance">Enhance Draft</TabsTrigger>
+            <TabsTrigger value="generate">Generate Ideas</TabsTrigger>
+          </TabsList>
+        </Tabs>
 
         {/* Top Controls Bar */}
         <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-card/50 p-4 rounded-xl border border-border">
@@ -159,6 +167,10 @@ export default function Dashboard() {
               <>
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Generating...
               </>
+            ) : mode === "generate" ? (
+              <>
+                <Lightbulb className="mr-2 h-5 w-5 fill-current" /> Generate Ideas
+              </>
             ) : (
               <>
                 <Sparkles className="mr-2 h-5 w-5 fill-current" /> Generate Rewrite
@@ -174,7 +186,9 @@ export default function Dashboard() {
             <div className="flex items-center justify-between p-4 border-b border-border/50 bg-card/20">
               <div className="flex items-center gap-2">
                 <div className="h-2 w-2 rounded-full bg-muted-foreground/50 group-hover:bg-primary transition-colors" />
-                <span className="text-sm font-medium text-muted-foreground">Original Text</span>
+                <span className="text-sm font-medium text-muted-foreground">
+                  {mode === "generate" ? "Topic / Context" : "Original Text"}
+                </span>
               </div>
               <Button
                 variant="ghost"
@@ -188,7 +202,9 @@ export default function Dashboard() {
 
             <Textarea
               className="flex-1 p-6 text-base leading-relaxed resize-none border-0 bg-transparent focus-visible:ring-0 placeholder:text-muted-foreground/30 font-mono"
-              placeholder="Paste your AI-generated draft here (e.g. from ChatGPT, Claude, etc)..."
+              placeholder={mode === "generate"
+                ? "Enter a topic (e.g. 'Future of SaaS', 'Remote Work Tips') and we'll generate on-brand ideas..."
+                : "Paste your AI-generated draft here (e.g. from ChatGPT, Claude, etc)..."}
               value={originalText}
               onChange={(e) => setOriginalText(e.target.value)}
             />
