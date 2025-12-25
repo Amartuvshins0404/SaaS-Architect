@@ -221,13 +221,13 @@ export default function Auth() {
           >
             <Quote className="absolute -top-4 -left-4 w-10 h-10 text-purple-500 fill-current opacity-50" />
             <p className="text-lg text-zinc-200 mb-6 relative z-10 italic">
-              "This is hands down the best tool I've used for LinkedIn content. It actually sounds like me, but smarter and faster."
+              "This is hands down the best tool I've used for <b>X(Twitter)</b> content. It actually sounds like me, but smarter and faster."
             </p>
             <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-full bg-gradient-to-br from-zinc-700 to-zinc-600 border border-white/10" />
+              <img  src="https://pbs.twimg.com/profile_images/1998823425557803008/oHR3D3b0_400x400.jpg" alt="profile" className="h-12 w-12 rounded-full"/>
               <div>
-                <div className="font-semibold text-white">Alex Chen</div>
-                <div className="text-sm text-zinc-500">Growth Design Lead</div>
+                <div className="font-semibold text-white">Amartuvshin Surenjav</div>
+                <div className="text-sm text-zinc-500">Software developer | Creator</div>
               </div>
             </div>
           </motion.div>
