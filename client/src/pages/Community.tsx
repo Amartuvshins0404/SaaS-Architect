@@ -1,4 +1,4 @@
-import { useState } from "react";
+    import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { api } from "@shared/routes";
 import { queryClient } from "@/lib/queryClient";
@@ -40,6 +40,7 @@ export default function Community() {
     const [isManageOpen, setIsManageOpen] = useState(false);
     const [isPaywallOpen, setIsPaywallOpen] = useState(false);
     const [tryingVoice, setTryingVoice] = useState<PublicVoice | null>(null);
+    const [viewingVoice, setViewingVoice] = useState<PublicVoice | null>(null);
 
     // Queries
     const { data: voices, isLoading } = useQuery<PublicVoice[]>({
@@ -166,6 +167,7 @@ export default function Community() {
                                 onClone={() => cloneMutation.mutate(voice.id)}
                                 onReview={(content, rating) => reviewMutation.mutate({ id: voice.id, content, rating })}
                                 onTry={() => setTryingVoice(voice)}
+                                onClick={() => setViewingVoice(voice)}
                             />
                         ))}
                     </div>
@@ -232,6 +234,13 @@ export default function Community() {
                     </DialogContent>
                 </Dialog>
 
+                {/* Voice Details Dialog */}
+                <VoiceDetailsDialog
+                    isOpen={!!viewingVoice}
+                    onClose={() => setViewingVoice(null)}
+                    voice={viewingVoice}
+                />
+
                 {/* Try Voice Dialog */}
                 <TryVoiceDialog
                     isOpen={!!tryingVoice}
@@ -240,6 +249,55 @@ export default function Community() {
                 />
             </div>
         </AppLayout>
+    );
+}
+
+function VoiceDetailsDialog({ isOpen, onClose, voice }: { isOpen: boolean, onClose: () => void, voice: PublicVoice | null }) {
+    if (!voice) return null;
+    return (
+        <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                    <div className="flex justify-between items-start mr-6">
+                        <div>
+                            <DialogTitle className="text-xl">{voice.name}</DialogTitle>
+                            <DialogDescription>by {voice.authorName || "Anonymous"}</DialogDescription>
+                        </div>
+                        <Badge variant="outline" className="flex gap-1 items-center">
+                            <Star className="w-3 h-3 fill-yellow-500 text-yellow-500" />
+                            {voice.rating.toFixed(1)}
+                        </Badge>
+                    </div>
+                </DialogHeader>
+
+                <div className="space-y-6 py-4">
+                    <div>
+                        <Label className="text-muted-foreground text-xs uppercase tracking-wider mb-2 block">Tones</Label>
+                        <div className="flex flex-wrap gap-2">
+                            {voice.toneTags?.map(tag => (
+                                <Badge key={tag} variant="secondary">{tag}</Badge>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div>
+                        <Label className="text-muted-foreground text-xs uppercase tracking-wider mb-2 block">Guidelines & Prompt</Label>
+                        <div className="p-4 bg-muted/30 rounded-lg border text-sm leading-relaxed whitespace-pre-wrap font-mono">
+                            {voice.guidelines}
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <span className="flex items-center gap-1"><ThumbsUp className="w-4 h-4" /> {voice.voteCount} votes</span>
+                        <span className="flex items-center gap-1"><MessageSquare className="w-4 h-4" /> {voice.reviewCount} reviews</span>
+                    </div>
+                </div>
+
+                <DialogFooter>
+                    <Button onClick={onClose}>Close</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 }
 
@@ -308,22 +366,23 @@ function TryVoiceDialog({ isOpen, onClose, voice }: { isOpen: boolean, onClose: 
     );
 }
 
-function VoiceCard({ voice, onVote, onClone, onReview, onTry }: {
+function VoiceCard({ voice, onVote, onClone, onReview, onTry, onClick }: {
     voice: PublicVoice,
     onVote: (t: number) => void,
     onClone: () => void,
     onReview: (c: string, r: number) => void,
-    onTry: () => void
+    onTry: () => void,
+    onClick: () => void
 }) {
     const [isReviewOpen, setIsReviewOpen] = useState(false);
     const [reviewText, setReviewText] = useState("");
     const [rating, setRating] = useState(5);
 
     return (
-        <Card className="flex flex-col h-full bg-card hover:border-primary/50 transition-colors">
+        <Card className="flex flex-col h-full bg-card hover:border-primary/50 transition-colors cursor-pointer group" onClick={onClick}>
             <CardHeader>
                 <div className="flex justify-between items-start">
-                    <CardTitle className="truncate">{voice.name}</CardTitle>
+                    <CardTitle className="truncate group-hover:text-primary transition-colors">{voice.name}</CardTitle>
                     <Badge variant="outline" className="flex gap-1 items-center">
                         <Star className="w-3 h-3 fill-yellow-500 text-yellow-500" />
                         {voice.rating.toFixed(1)} ({voice.reviewCount})
@@ -340,8 +399,9 @@ function VoiceCard({ voice, onVote, onClone, onReview, onTry }: {
                 <p className="text-sm text-muted-foreground line-clamp-3 italic">
                     "{voice.guidelines}"
                 </p>
+                <p className="text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity">Click to view details</p>
             </CardContent>
-            <CardFooter className="border-t pt-4 flex justify-between items-center text-sm text-muted-foreground">
+            <CardFooter className="border-t pt-4 flex justify-between items-center text-sm text-muted-foreground" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center gap-1">
                     <Button variant="ghost" size="icon" className={`h-8 w-8 ${voice.hasVoted === 1 ? 'text-green-500' : ''}`} onClick={() => onVote(1)}>
                         <ThumbsUp className="w-4 h-4" />

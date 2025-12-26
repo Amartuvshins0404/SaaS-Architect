@@ -17,6 +17,7 @@ export default function Voices() {
   const { mutateAsync: deleteVoice, isPending: deleting } = useDeleteBrandVoice();
   const { toast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
+  const [viewingVoice, setViewingVoice] = useState<any | null>(null);
 
   // Form State
   const [name, setName] = useState("");
@@ -83,7 +84,8 @@ export default function Voices() {
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (e: React.MouseEvent, id: number) => {
+    e.stopPropagation();
     if (confirm("Are you sure you want to delete this voice?")) {
       try {
         await deleteVoice(id);
@@ -188,7 +190,11 @@ export default function Voices() {
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {voices?.map((voice) => (
-              <Card key={voice.id} className="group relative overflow-hidden transition-all hover:shadow-lg hover:border-primary/50 border-primary/20 bg-card/50">
+              <Card
+                key={voice.id}
+                className="group relative overflow-hidden transition-all hover:shadow-lg hover:border-primary/50 border-primary/20 bg-card/50 cursor-pointer"
+                onClick={() => setViewingVoice(voice)}
+              >
                 <div className="p-6 space-y-4">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
@@ -196,7 +202,7 @@ export default function Voices() {
                         <Mic2 className="h-5 w-5" />
                       </div>
                       <div>
-                        <h3 className="font-bold text-lg leading-tight text-foreground">{voice.name}</h3>
+                        <h3 className="font-bold text-lg leading-tight text-foreground transition-colors group-hover:text-primary">{voice.name}</h3>
                         <p className="text-xs text-muted-foreground mt-0.5">Created recently</p>
                       </div>
                     </div>
@@ -204,7 +210,7 @@ export default function Voices() {
                       variant="ghost"
                       size="icon"
                       className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                      onClick={() => handleDelete(voice.id)}
+                      onClick={(e) => handleDelete(e, voice.id)}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -223,12 +229,40 @@ export default function Voices() {
                       <FileText className="inline-block w-3 h-3 mr-1 mb-0.5 opacity-50" />
                       {voice.guidelines}
                     </div>
+                    <p className="text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity">Click to view details</p>
                   </div>
                 </div>
               </Card>
             ))}
           </div>
         )}
+
+        <Dialog open={!!viewingVoice} onOpenChange={(open) => !open && setViewingVoice(null)}>
+          <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="text-xl">{viewingVoice?.name}</DialogTitle>
+              <DialogDescription>Your custom brand voice</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-6 py-4">
+              <div>
+                <Label className="text-muted-foreground text-xs uppercase tracking-wider mb-2 block">Tones</Label>
+                <div className="flex flex-wrap gap-2">
+                  {viewingVoice?.toneTags?.map((tag: string, i: number) => (
+                    <span key={i} className="inline-flex items-center rounded-md bg-secondary/50 px-2 py-1 text-xs font-medium text-secondary-foreground border border-white/5">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <Label className="text-muted-foreground text-xs uppercase tracking-wider mb-2 block">Guidelines & Prompt</Label>
+                <div className="p-4 bg-muted/30 rounded-lg border text-sm leading-relaxed whitespace-pre-wrap font-mono">
+                  {viewingVoice?.guidelines}
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </AppLayout>
   );
